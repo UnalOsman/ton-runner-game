@@ -318,13 +318,10 @@ window.addEventListener('keydown', (e) => {
 let touchStartX = 0;
 let touchStartY = 0;
 window.addEventListener('touchstart', e => {
-    e.preventDefault();
     touchStartX = e.changedTouches[0].screenX;
     touchStartY = e.changedTouches[0].screenY;
-}, {passive : false });
+});
 window.addEventListener('touchend', e => {
-    e.preventDefault();
-
     if (!state.isPlaying) return;
     const touchEndX = e.changedTouches[0].screenX;
     const touchEndY = e.changedTouches[0].screenY;
@@ -344,7 +341,7 @@ window.addEventListener('touchend', e => {
             setTimeout(() => state.isSliding = false, 800); 
         }
     }
-}, {passive : false});
+});
 
 
 // ... (Diğer TON Olayları ve Butonlar aynı kaldı) ...
