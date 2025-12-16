@@ -15,24 +15,6 @@ const state = {
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-// >>> YENİ EKLENEN KOD BAŞLANGIÇ <<<
-
-// 1. Uygulamanın Kullanıma Hazır Olduğunu Bildir
-// Bu, Telegram'a uygulamanın tüm arayüz bileşenlerini yüklediğini ve kontrolü eline aldığını söyler.
-tg.ready(); 
-
-// 2. Viewport'u Sabitleme
-// Bu, Telegram'a pencerenin boyutunun değişmemesi gerektiğini söyler, ki bu da kaydırma davranışını etkileyebilir.
-tg.viewportStable = true;
-// Gerekirse arka planı saydam yapar (genellikle tam ekranı desteklerken önemlidir)
-tg.backgroundColor = '#87CEEB'; // Sahne arka plan renginizi kullanın (varsa)
-
-// 3. Mini Uygulama Pencere Kontrolünü Kullanma
-// Telegram'ın pencere kaydırma davranışını yönetmek için kullanılan bir deneme fonksiyonu (tüm cihazlarda desteklenmez)
-if (tg.setHeaderColor) {
-    tg.setHeaderColor('bg_color'); // Başlık çubuğu rengini arka plan rengiyle eşleştir
-}
-
 // ... (Limit Sistemi ve UI Fonksiyonları önceki gibi) ...
 function initDailyLimits() {
     updateUI(); 
