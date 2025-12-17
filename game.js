@@ -4,38 +4,49 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
-// --- 1. TELEGRAM KULLANICI ADINI ÇEKME ---
-// Telegram verisi var mı kontrol et
+// --- 1. VERİ KAYIT SİSTEMİ (LocalStorage) ---
+let userData = {
+    totalTurtles: 0,
+    highScore: 0
+};
+
+function loadUserData() {
+    const saved = localStorage.getItem('bluppie_save_v1');
+    if (saved) {
+        userData = JSON.parse(saved);
+    }
+    updateMenuUI();
+}
+
+function saveUserData() {
+    localStorage.setItem('bluppie_save_v1', JSON.stringify(userData));
+    updateMenuUI();
+}
+
+function updateMenuUI() {
+    const totalEl = document.getElementById('total-turtle-count');
+    if (totalEl) totalEl.innerText = userData.totalTurtles;
+}
+
+// Telegram Kullanıcı Adı
 const user = tg.initDataUnsafe.user;
 if (user) {
     const usernameDisplay = document.getElementById('username-display');
     if (usernameDisplay) {
-        // Kullanıcı adı varsa @ ile, yoksa First Name ile göster
-        if (user.username) {
-            usernameDisplay.innerText = "@" + user.username;
-        } else {
-            usernameDisplay.innerText = user.first_name;
-        }
+        usernameDisplay.innerText = user.username ? "@" + user.username : user.first_name;
     }
-} else {
-    // Telegram dışından açıldıysa (Test amaçlı)
-    const usernameDisplay = document.getElementById('username-display');
-    if(usernameDisplay) usernameDisplay.innerText = "@TestUser";
 }
 
-// --- KAYDIRMA ENGELLEME (KAPANMA SORUNU İÇİN) ---
-if (tg.isVerticalSwipingEnabled) {
-    tg.disableVerticalSwiping();
-}
-document.addEventListener('touchmove', function(e) {
-    e.preventDefault();
-}, { passive: false });
+// Kaydırma Engelleme
+if (tg.isVerticalSwipingEnabled) tg.disableVerticalSwiping();
+document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
 
-// --- STATE ---
+// --- OYUN STATE ---
 const state = {
     isPlaying: false,
+    isPaused: false, // Yeni: Duraklatma durumu
     score: 0,
-    turtlesCollected: 0, 
+    turtlesCollected: 0, // Bu koşudaki turta
     lane: 0, 
     speed: 0.5,
     isJumping: false,
@@ -44,16 +55,14 @@ const state = {
     nextTurtleTimer: 2.0
 };
 
-// --- UI GÜNCELLEME ---
-function updateUI() {
-    const liveScoreEl = document.getElementById('live-score');
-    if(liveScoreEl) liveScoreEl.innerText = Math.floor(state.score);
-
-    const turtleEl = document.getElementById('turtle-count');
-    if(turtleEl) turtleEl.innerText = state.turtlesCollected;
+// --- OYUN İÇİ UI GÜNCELLEME ---
+function updateGameUI() {
+    // Sadece oyun içindeki sayaçları güncelle
+    document.getElementById('in-game-score').innerText = Math.floor(state.score).toString().padStart(5, '0');
+    document.getElementById('in-game-turtles').innerText = state.turtlesCollected;
 }
 
-// --- Three.js Kurulumu ---
+// --- Three.js Kurulumu (AYNI) ---
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 scene.fog = new THREE.Fog(0x87CEEB, 10, 40);
@@ -123,48 +132,75 @@ function generateTurtle() {
     state.nextTurtleTimer = Math.random() * 2.0 + 1.5; 
 }
 
+// --- OYUN AKIŞI ---
+
 function startGame() {
     state.isPlaying = true;
+    state.isPaused = false;
     state.score = 0;
     state.turtlesCollected = 0;
     state.lane = 0;
     player.position.x = 0;
-    player.position.y = 0.5;
     
+    // Temizlik
     obstacles.forEach(o => scene.remove(o));
     obstacles.length = 0;
     turtles.forEach(t => scene.remove(t));
     turtles.length = 0;
 
+    // UI Değişimi: Menüyü Gizle, Oyun UI Göster
+    document.getElementById('menu-header').classList.add('hidden');
     document.getElementById('start-screen').classList.add('hidden');
     document.getElementById('game-over-screen').classList.add('hidden');
-    
-    // Canlı skoru göster
-    document.getElementById('live-score').classList.remove('hidden');
+    document.getElementById('game-ui').classList.remove('hidden');
 }
 
-function goToMainMenu() {
-    state.isPlaying = false;
-    document.getElementById('game-over-screen').classList.add('hidden');
-    document.getElementById('start-screen').classList.remove('hidden');
-    document.getElementById('live-score').classList.add('hidden');
-    
-    obstacles.forEach(o => scene.remove(o));
-    obstacles.length = 0;
-    turtles.forEach(t => scene.remove(t));
-    turtles.length = 0;
-    player.position.x = 0;
+function pauseGame() {
+    if (!state.isPlaying) return;
+    state.isPaused = true;
+    document.getElementById('pause-screen').classList.remove('hidden');
+}
+
+function resumeGame() {
+    state.isPaused = false;
+    document.getElementById('pause-screen').classList.add('hidden');
 }
 
 function endGame() {
     state.isPlaying = false;
     if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
     
-    document.getElementById('live-score').classList.add('hidden');
+    // Verileri Kaydet
+    userData.totalTurtles += state.turtlesCollected;
+    if (state.score > userData.highScore) userData.highScore = Math.floor(state.score);
+    saveUserData();
+
+    // UI Değişimi: Oyun UI Gizle, Sonuç Göster
+    document.getElementById('game-ui').classList.add('hidden');
+    document.getElementById('menu-header').classList.remove('hidden'); // Header geri gelir
+    
     document.getElementById('final-score').innerText = Math.floor(state.score);
+    document.getElementById('final-turtles').innerText = state.turtlesCollected;
     document.getElementById('game-over-screen').classList.remove('hidden');
 }
 
+function goToMainMenu() {
+    state.isPlaying = false;
+    state.isPaused = false;
+    document.getElementById('game-over-screen').classList.add('hidden');
+    document.getElementById('pause-screen').classList.add('hidden');
+    document.getElementById('start-screen').classList.remove('hidden');
+    document.getElementById('game-ui').classList.add('hidden');
+    document.getElementById('menu-header').classList.remove('hidden');
+    
+    obstacles.forEach(o => scene.remove(o));
+    obstacles.length = 0;
+    turtles.forEach(t => scene.remove(t));
+    turtles.length = 0;
+    player.position.x = 0;
+}
+
+// --- FİZİK VE KONTROLLER ---
 function checkCollisions() {
     const playerBox = new THREE.Box3().setFromObject(player);
     
@@ -224,9 +260,10 @@ function animate(time) {
     const deltaTime = (time - lastTime) / 1000 * 60; 
     lastTime = time;
 
-    if (state.isPlaying) {
+    // Sadece oyun oynanıyorsa ve PAUSE DEĞİLSE güncelle
+    if (state.isPlaying && !state.isPaused) {
         state.score += 0.1 * deltaTime; 
-        updateUI(); 
+        updateGameUI(); // Yeni UI güncellemesi
         
         state.nextObstacleTimer -= (0.01 * deltaTime);
         if (state.nextObstacleTimer <= 0) generateObstacle();
@@ -241,24 +278,21 @@ function animate(time) {
     renderer.render(scene, camera);
 }
 
-// Kontroller
+// Klavye
 window.addEventListener('keydown', (e) => {
-    if (!state.isPlaying) return;
+    if (!state.isPlaying || state.isPaused) return;
     if ((e.key === 'ArrowLeft' || e.key === 'a') && state.lane > -1) state.lane--;
     if ((e.key === 'ArrowRight' || e.key === 'd') && state.lane < 1) state.lane++;
-    if ((e.key === 'ArrowUp' || e.key === 'w') && !state.isJumping) {
-        state.isJumping = true; jumpVelocity = JUMP_VELOCITY_START; 
-    }
-    if ((e.key === 'ArrowDown' || e.key ==='s') && !state.isJumping && !state.isSliding) {
-        state.isSliding = true; setTimeout(() => state.isSliding = false, 800);
-    }
+    if ((e.key === 'ArrowUp' || e.key === 'w') && !state.isJumping) { state.isJumping = true; jumpVelocity = JUMP_VELOCITY_START; }
+    if ((e.key === 'ArrowDown' || e.key ==='s') && !state.isJumping && !state.isSliding) { state.isSliding = true; setTimeout(() => state.isSliding = false, 800); }
 });
 
+// Dokunmatik
 let touchStartX = 0;
 let touchStartY = 0;
 window.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; touchStartY = e.changedTouches[0].screenY; }, {passive : true });
 window.addEventListener('touchend', e => {
-    if (!state.isPlaying) return;
+    if (!state.isPlaying || state.isPaused) return;
     const dx = e.changedTouches[0].screenX - touchStartX;
     const dy = e.changedTouches[0].screenY - touchStartY;
     if (Math.abs(dx) > 30 || Math.abs(dy) > 30) {
@@ -272,19 +306,16 @@ window.addEventListener('touchend', e => {
     }
 }, { passive: true });
 
-tonConnectUI.onStatusChange(async (wallet) => {
-    if (wallet) {
-        document.getElementById('btn-buy-reset').disabled = false;
-        const hasNFT = await checkNftOwnership(wallet.account.address);
-        player.material.color.setHex(hasNFT ? 0xd4af37 : 0xff0000);
-        document.getElementById('nft-status').innerText = hasNFT ? "✅ Özel Skin Aktif!" : "Standart Skin";
-    }
-});
-
+// Event Listenerlar
 document.getElementById('btn-start').addEventListener('click', startGame);
 document.getElementById('btn-restart').addEventListener('click', startGame);
 document.getElementById('btn-home').addEventListener('click', goToMainMenu);
 document.getElementById('btn-buy-reset').addEventListener('click', purchasePlayReset);
+
+// Pause Listenerları
+document.getElementById('btn-pause').addEventListener('click', pauseGame);
+document.getElementById('btn-resume').addEventListener('click', resumeGame);
+document.getElementById('btn-quit').addEventListener('click', goToMainMenu);
 
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -292,4 +323,6 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// Başlangıç
+loadUserData(); // Kayıtlı veriyi yükle
 animate();

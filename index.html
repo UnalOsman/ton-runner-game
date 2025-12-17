@@ -6,44 +6,49 @@
     <title>Bluppie Runner</title>
     
     <link rel="stylesheet" href="style.css">
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
     <div id="game-container"></div>
     
-    <div id="live-score" class="hidden">0</div>
-
     <div id="ui-layer">
-        <header>
+        <header id="menu-header">
             <div class="profile-section">
                 <div class="profile-pic">
                     <img src="https://placehold.co/40x40/00bfff/ffffff?text=B" alt="Profile">
                 </div>
                 <span class="username" id="username-display">@Loading...</span>
-                
                 <div id="ton-connect-btn" style="display:none;"></div> 
             </div>
 
             <div class="resources">
                 <div class="res-box">
                     <span class="icon">🥧</span>
-                    <span id="turtle-count">0</span>
-                </div>
-                <div class="res-box inactive">
-                    <span class="icon">💧</span>
-                    <span>0</span>
+                    <span id="total-turtle-count">0</span>
                 </div>
             </div>
         </header>
 
+        <div id="game-ui" class="hidden">
+            <button id="btn-pause" class="game-btn">
+                <i class="fa-solid fa-pause"></i>
+            </button>
+
+            <div class="game-stats-container">
+                <div class="game-score-box">
+                    <span id="in-game-score">00000</span>
+                </div>
+                <div class="game-coin-box">
+                    <span id="in-game-turtles">0</span> <span class="icon">🥧</span>
+                </div>
+            </div>
+        </div>
+
         <div id="start-screen" class="main-menu">
-            
             <div class="play-container">
                 <button id="btn-start" class="btn-play">
                     <span>Play</span>
@@ -76,9 +81,16 @@
             </nav>
         </div>
 
+        <div id="pause-screen" class="modal hidden">
+            <h2>DURAKLATILDI</h2>
+            <button id="btn-resume" class="btn-play small">DEVAM ET</button>
+            <button id="btn-quit" class="btn-pill" style="margin-top:10px; background:#555;">MENÜYE DÖN</button>
+        </div>
+
         <div id="game-over-screen" class="modal hidden">
             <h2>OYUN BİTTİ</h2>
-            <p>Skorun: <span id="final-score">0</span></p>
+            <p>Skor: <span id="final-score">0</span></p>
+            <p style="font-size:14px; color:#666;">Toplanan: <span id="final-turtles">0</span> 🥧</p>
             
             <div style="display: flex; gap: 10px; flex-direction: column; width: 100%;">
                 <button id="btn-restart" class="btn-play small">TEKRAR DENE</button>
@@ -97,6 +109,6 @@
     </div>
 
     <script type="module" src="ton-service.js"></script>
-    <script type="module" src="game.js?v=1.5"></script>
+    <script type="module" src="game.js?v=2.0"></script>
 </body>
 </html>

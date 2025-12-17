@@ -1,140 +1,197 @@
+/* --- GLOBAL AYARLAR VE DEĞİŞKENLER --- */
 :root {
-    --primary-purple: #4a0e8f;
-    --light-purple: #bfa3ff;
-    --bg-gradient: linear-gradient(180deg, #dcdce6 0%, #ffffff 100%);
-    --text-color: #ffffff;
+    --primary-purple: #4a0e8f; /* Ana Mor */
+    --light-purple: #bfa3ff;  /* Açık Mor */
+    --bg-gradient: linear-gradient(180deg, #dcdce6 0%, #ffffff 100%); /* Arkaplan */
 }
 
 html, body {
-    margin: 0; padding: 0;
-    width: 100%; height: 100%;
-    overflow: hidden;
+    margin: 0; 
+    padding: 0;
+    width: 100%; 
+    height: 100%;
+    overflow: hidden; /* Kaydırmayı engelle */
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    user-select: none;
+    user-select: none; /* Metin seçimini engelle */
     background: var(--bg-gradient);
-    touch-action: none;
+    touch-action: none; /* Mobil dokunmatik hareketlerini tarayıcıdan ayır */
 }
 
-#game-container {
-    position: absolute; top: 0; left: 0;
-    width: 100%; height: 100%;
-    z-index: 1;
+/* --- OYUN SAHNESİ --- */
+#game-container { 
+    position: absolute; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%; 
+    z-index: 1; 
 }
 
-#ui-layer {
-    position: absolute; top: 0; left: 0;
-    width: 100%; height: 100%;
-    z-index: 10;
-    pointer-events: none;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+/* --- ARAYÜZ KATMANI (UI) --- */
+#ui-layer { 
+    position: absolute; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%; 
+    z-index: 10; 
+    pointer-events: none; /* Tıklamalar alttaki oyuna geçsin */
+    display: flex; 
+    flex-direction: column; 
+    justify-content: space-between; 
 }
 
-/* --- HEADER (DÜZELTİLDİ: Padding Artırıldı) --- */
+/* --- 1. MENÜ HEADER (Ana Menüdeyken Görünür) --- */
 header {
-    display: flex;
-    justify-content: space-between;
+    display: flex; 
+    justify-content: space-between; 
     align-items: center;
-    /* Eski: padding: 15px 20px; */
-    /* Yeni: Üstten 50px boşluk bırakarak aşağı indirdik */
+    /* ÖNEMLİ: Telegram'ın Kapat/Ayarlar butonuyla çakışmaması için üstten boşluk */
     padding: 50px 20px 15px 20px; 
-    pointer-events: auto;
+    pointer-events: auto; /* Tıklanabilir olsun */
+    transition: transform 0.3s ease;
 }
 
-.profile-section {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+header.hidden { 
+    display: none; 
 }
 
-.profile-pic {
-    width: 40px; height: 40px;
-    background: white;
-    border-radius: 50%;
-    overflow: hidden;
-    border: 2px solid white;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+/* Profil Alanı */
+.profile-section { display: flex; align-items: center; gap: 10px; }
+
+.profile-pic { 
+    width: 40px; 
+    height: 40px; 
+    background: white; 
+    border-radius: 50%; 
+    overflow: hidden; 
+    border: 2px solid white; 
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2); 
 }
 .profile-pic img { width: 100%; height: 100%; object-fit: cover; }
 
-.username {
-    font-weight: 800;
-    color: #000;
-    font-size: 16px;
-    text-shadow: 1px 1px 0px white;
+.username { 
+    font-weight: 800; 
+    color: #000; 
+    font-size: 16px; 
+    text-shadow: 1px 1px 0px white; 
 }
 
-.resources {
-    display: flex;
-    gap: 5px;
-}
-
+/* Bakiye Kutusu (Header) */
+.resources { display: flex; gap: 5px; }
 .res-box {
-    background: rgba(120, 80, 160, 0.8);
+    background: rgba(120, 80, 160, 0.8); 
     color: white;
-    padding: 5px 12px;
+    padding: 5px 12px; 
     border-radius: 15px;
-    display: flex;
-    align-items: center;
+    display: flex; 
+    align-items: center; 
     gap: 5px;
-    font-weight: bold;
+    font-weight: bold; 
     font-size: 14px;
-    border: 1px solid rgba(255,255,255,0.3);
-    min-width: 50px;
+    border: 1px solid rgba(255,255,255,0.3); 
+    min-width: 50px; 
     justify-content: center;
 }
 
-.res-box.inactive {
-    opacity: 0.8; 
-    cursor: default;
-}
-
-/* --- OYUN İÇİ CANLI SKOR --- */
-#live-score {
-    position: absolute;
-    top: 15%; /* Header aşağı indiği için bunu da biraz orantılayabiliriz ama %15 iyidir */
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 40px;
-    font-weight: 900;
-    color: white;
-    text-shadow: 0 2px 5px rgba(0,0,0,0.5);
-    z-index: 5;
+/* --- 2. OYUN İÇİ ARAYÜZ (Play'e Basınca Görünür) --- */
+#game-ui {
+    position: absolute; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%;
     pointer-events: none;
-    font-family: 'Segoe UI', sans-serif;
 }
-#live-score.hidden { display: none; }
+#game-ui.hidden { display: none; }
 
-/* --- MAIN MENU --- */
-.main-menu {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-end; /* Alt kısıma yasla */
-    padding-bottom: 20px;
+/* Sol Üst: Durdur (Pause) Butonu */
+.game-btn {
     pointer-events: auto;
-    background: rgba(255,255,255,0.0);
-    
-    /* Hayalet gidince menü çok aşağı çökmesin diye biraz üst boşluk verebiliriz */
-    padding-top: 100px; 
+    position: absolute;
+    /* Telegram butonunun altına gelmesi için biraz aşağıda */
+    top: 50px; 
+    left: 20px; 
+    width: 45px; 
+    height: 45px;
+    background: #0d6efd; /* Dikkat çekici mavi */
+    border: 2px solid white;
+    border-radius: 12px;
+    color: white; 
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #004ba0; /* 3D Buton Efekti */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.game-btn:active { 
+    transform: translateY(2px); 
+    box-shadow: 0 2px 0 #004ba0; 
+}
+
+/* Sağ Üst: Skor ve Turta Bilgisi */
+.game-stats-container {
+    position: absolute;
+    top: 50px; 
+    right: 20px;
+    display: flex; 
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+/* Büyük Skor Yazısı */
+.game-score-box {
+    font-family: 'Segoe UI', sans-serif;
+    font-weight: 900; 
+    font-size: 32px;
+    color: white;
+    text-shadow: 2px 2px 0 #000, 0 0 10px rgba(0,0,0,0.5);
+    line-height: 1;
+}
+
+/* Küçük Turta Göstergesi */
+.game-coin-box {
+    background: rgba(0, 0, 0, 0.5);
+    color: #ffd700; /* Altın sarısı */
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-weight: bold; 
+    font-size: 18px;
+    display: flex; 
+    align-items: center; 
+    gap: 6px;
+    border: 1px solid rgba(255,255,255,0.2);
+    backdrop-filter: blur(4px);
+}
+
+/* --- 3. ANA MENÜ (Start Screen) --- */
+.main-menu {
+    flex-grow: 1; 
+    display: flex; 
+    flex-direction: column;
+    align-items: center; 
+    justify-content: flex-end;
+    padding-bottom: 20px; 
+    pointer-events: auto;
+    /* Header yukarıda olduğu için menüyü biraz aşağı itiyoruz */
+    padding-top: 80px;
 }
 
 /* Play Butonu */
 .play-container { margin-bottom: 15px; width: 80%; }
-
 .btn-play {
     background: linear-gradient(90deg, #3a006b 0%, #5900b3 100%);
-    color: white;
-    border: 2px solid white;
-    padding: 15px 0;
+    color: white; 
+    border: 2px solid white; 
+    padding: 15px 0; 
     width: 100%;
-    border-radius: 30px;
-    font-size: 28px;
-    font-weight: 900;
+    border-radius: 30px; 
+    font-size: 28px; 
+    font-weight: 900; 
     cursor: pointer;
-    box-shadow: 0 5px 15px rgba(74, 14, 143, 0.4);
+    box-shadow: 0 5px 15px rgba(74, 14, 143, 0.4); 
     text-transform: uppercase;
     position: relative;
     overflow: hidden;
@@ -142,66 +199,78 @@ header {
 .btn-play.small { font-size: 18px; padding: 12px 0; }
 .btn-play:active { transform: scale(0.98); }
 
-/* Alt Butonlar */
-.sub-controls {
-    display: flex;
-    justify-content: center;
-    gap: 15px;
-    margin-bottom: 20px;
-    width: 100%;
+/* Alt Butonlar (Settings / Life) */
+.sub-controls { 
+    display: flex; 
+    justify-content: center; 
+    gap: 15px; 
+    margin-bottom: 20px; 
+    width: 100%; 
 }
-
 .btn-pill {
-    background: #3a006b;
-    color: white;
+    background: #3a006b; 
+    color: white; 
     border: 2px solid white;
-    padding: 8px 20px;
-    border-radius: 20px;
+    padding: 8px 20px; 
+    border-radius: 20px; 
     font-weight: bold;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    font-size: 14px; 
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
     cursor: pointer;
 }
 
-/* --- BOTTOM NAV --- */
+/* Alt Navigasyon (Footer) */
 .bottom-nav {
-    display: flex;
-    justify-content: space-around;
+    display: flex; 
+    justify-content: space-around; 
     width: 100%;
-    background: #2a004d;
+    background: #2a004d; 
     padding: 15px 0;
-    border-top-left-radius: 20px;
+    border-top-left-radius: 20px; 
     border-top-right-radius: 20px;
 }
-
-.nav-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    color: #a080c0;
-    font-size: 12px;
-    gap: 5px;
-    cursor: pointer;
+.nav-item { 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    color: #a080c0; 
+    font-size: 12px; 
+    gap: 5px; 
 }
 .nav-item.active { color: white; }
 .nav-item i { font-size: 20px; }
 
-/* --- MODAL (Game Over) --- */
+/* --- 4. MODAL PENCERELER (Pause / Game Over) --- */
 .hidden { display: none !important; }
+
 .modal {
-    position: absolute;
-    top: 50%; left: 50%;
+    position: absolute; 
+    top: 50%; 
+    left: 50%;
     transform: translate(-50%, -50%);
     background: rgba(255, 255, 255, 0.95);
-    padding: 30px;
-    border-radius: 25px;
+    padding: 30px; 
+    border-radius: 25px; 
     text-align: center;
     box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-    width: 80%;
-    max-width: 300px;
-    pointer-events: auto;
+    width: 80%; 
+    max-width: 300px; 
+    pointer-events: auto; 
     z-index: 100;
 }
 .modal h2 { margin-top: 0; color: #3a006b; }
+.modal p { color: #555; font-weight: bold; }
+
+/* Mağaza / Can Yenileme Bölümü */
+.shop-section {
+    margin-top: 20px; 
+    padding-top: 15px; 
+    border-top: 1px solid #eee;
+}
+.status-msg {
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 5px;
+}
