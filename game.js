@@ -15,6 +15,8 @@ const state = {
 const tg = window.Telegram.WebApp;
 tg.expand();
 
+tg.ready();
+
 // ... (Limit Sistemi ve UI Fonksiyonları önceki gibi) ...
 function initDailyLimits() {
     updateUI(); 
@@ -125,7 +127,7 @@ function generateObstacle() {
             typeName = 'Jump';
             break;
         case 2: // Kayma Engeli (Sarı)
-            height = 1.5; // Zıplama engelinden daha yüksek ama kayarak geçilebilecek bir boşluk bırakacak
+            height = 1.8; // Zıplama engelinden daha yüksek ama kayarak geçilebilecek bir boşluk bırakacak
             // Yüksekliği 3'ten 1.5'e indirdik ve Y pozisyonunu daha mantıklı ayarladık.
             yPos = 1.5; // 0.5 (normal boy) + 2 (kayma boşluğu)
             geometry = new THREE.BoxGeometry(1.5, height, 1);
@@ -219,7 +221,7 @@ function checkCollisions() {
 
 // --- Zıplama/Kayma Mantığı (AYARLANDI) ---
 // Zıplama gücünü artırdık
-const JUMP_VELOCITY_START = 0.5; 
+const JUMP_VELOCITY_START = 0.4; 
 const GRAVITY = -0.05; 
 let jumpVelocity = 0;
 
