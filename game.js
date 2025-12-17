@@ -4,32 +4,29 @@ import { tonConnectUI, checkNftOwnership, purchasePlayReset } from './ton-servic
 const state = {
     isPlaying: false,
     score: 0,
+    turtlesCollected: 0, // Yeni: Toplanan turtalar
     lane: 0, 
-    speed: 0.5, // Hız hissini artırdık
-    dailyPlays: 9999,
+    speed: 0.5,
     isJumping: false,
     isSliding: false,
-    nextObstacleTimer: 0.0 // İlk engel hemen çıksın diye sıfırla
+    nextObstacleTimer: 0.0,
+    nextTurtleTimer: 2.0 // Yeni: Turta zamanlayıcısı
 };
 
 const tg = window.Telegram.WebApp;
 tg.expand();
-
 tg.ready();
 
-// ... (Limit Sistemi ve UI Fonksiyonları önceki gibi) ...
-function initDailyLimits() {
-    updateUI(); 
-    document.getElementById('play-count').innerText = "SINIRSIZ"; 
-}
-function saveLimits() {}
+// --- UI Güncellemeleri ---
 function updateUI() {
     const btnStart = document.getElementById('btn-start');
     btnStart.innerText = "OYNA";
     btnStart.disabled = false;
     btnStart.style.opacity = "1";
+    
+    // UI'da skor ve turta sayılarını güncelle (HTML'de varsa)
+    document.getElementById('score').innerText = Math.floor(state.score);
 }
-// --------------------------------------------------------
 
 // --- Three.js Kurulumu ---
 const scene = new THREE.Scene();
@@ -58,38 +55,8 @@ const floor = new THREE.Mesh(floorGeo, floorMat);
 floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
 
-// --- Şerit Ayırıcılar (KESİKLİ ÇİZGİ SİSTEMİ) ---
-// Yola 50 adet kısa çizgi ekleyeceğiz
-
-const LINE_COUNT = 50;
-const LINE_LENGTH = 1.0;
-const LINE_GAP = 1.0; // Çizgi ve boşluk uzunlukları
-
-const laneMarkerGeo = new THREE.BoxGeometry(0.1, 0.01, LINE_LENGTH); 
-const laneMarkerMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-
-// Çizgileri tutan grup
 const markerGroup = new THREE.Group(); 
 scene.add(markerGroup);
-
-// Sol ve Sağ şeritler için kesikli çizgileri oluştur
-/*
-for (let i = 0; i < LINE_COUNT; i++) {
-    const zOffset = i * (LINE_LENGTH + LINE_GAP) - 20; // Z koordinatlarını dağıt
-
-    // Sol Çizgi
-    const markerL = new THREE.Mesh(laneMarkerGeo, laneMarkerMat);
-    markerL.position.set(-2, 0.01, zOffset); 
-    markerL.rotation.x = -Math.PI / 2;
-    markerGroup.add(markerL);
-
-    // Sağ Çizgi
-    const markerR = new THREE.Mesh(laneMarkerGeo, laneMarkerMat);
-    markerR.position.set(2, 0.01, zOffset); 
-    markerR.rotation.x = -Math.PI / 2;
-    markerGroup.add(markerR);
-}
-*/
 
 // Oyuncu
 const playerGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -98,65 +65,85 @@ const player = new THREE.Mesh(playerGeo, playerMat);
 player.position.y = 0.5;
 scene.add(player);
 
-
-// --- Engel Üretimi ve Ayarlar (TUNING) ---
+// --- Engel ve Turta Listeleri ---
 const obstacles = [];
+const turtles = [];
 const OBSTACLE_Z_SPAWN = -40; 
 const OBSTACLE_LANE_X = [-2, 0, 2]; 
 
+// --- Gelişmiş Engel Üretimi (Çift Engel Olasılığı) ---
 function generateObstacle() {
-    const obstacleType = Math.floor(Math.random() * 3); 
-    const laneIndex = Math.floor(Math.random() * 3); 
-    const xPos = OBSTACLE_LANE_X[laneIndex];
+    // %30 ihtimalle 2 engel, %70 ihtimalle 1 engel
+    const obstacleCount = Math.random() > 0.7 ? 2 : 1;
+    const availableLanes = [...OBSTACLE_LANE_X];
 
-    let geometry, material, height, yPos, typeName;
+    for (let i = 0; i < obstacleCount; i++) {
+        const laneIdx = Math.floor(Math.random() * availableLanes.length);
+        const xPos = availableLanes.splice(laneIdx, 1)[0];
 
-    switch(obstacleType) {
-        case 0: // Duvar Engeli (Kırmızı)
-            height = 3; 
-            yPos = height / 2;
-            geometry = new THREE.BoxGeometry(1.5, height, 1);
-            material = new THREE.MeshPhongMaterial({ color: 0x880000 }); 
-            typeName = 'Wall';
-            break;
-        case 1: // Zıplama Engeli (Mavi)
-            height = 1.5; // Zıplama yüksekliği ile geçebileceği seviye
-            yPos = height / 2;
-            geometry = new THREE.BoxGeometry(1.5, height, 1);
-            material = new THREE.MeshPhongMaterial({ color: 0x008888 }); 
-            typeName = 'Jump';
-            break;
-        case 2: // Kayma Engeli (Sarı)
-            height = 1.8; // Zıplama engelinden daha yüksek ama kayarak geçilebilecek bir boşluk bırakacak
-            // Yüksekliği 3'ten 1.5'e indirdik ve Y pozisyonunu daha mantıklı ayarladık.
-            yPos = 1.5; // 0.5 (normal boy) + 2 (kayma boşluğu)
-            geometry = new THREE.BoxGeometry(1.5, height, 1);
-            material = new THREE.MeshPhongMaterial({ color: 0x888800 }); 
-            typeName = 'Slide';
-            break;
+        const obstacleType = Math.floor(Math.random() * 3); 
+        let geometry, material, height, yPos, typeName;
+
+        switch(obstacleType) {
+            case 0: // Duvar
+                height = 3; yPos = height / 2;
+                geometry = new THREE.BoxGeometry(1.5, height, 1);
+                material = new THREE.MeshPhongMaterial({ color: 0x880000 }); 
+                typeName = 'Wall';
+                break;
+            case 1: // Zıplama
+                height = 1.5; yPos = height / 2;
+                geometry = new THREE.BoxGeometry(1.5, height, 1);
+                material = new THREE.MeshPhongMaterial({ color: 0x008888 }); 
+                typeName = 'Jump';
+                break;
+            case 2: // Kayma
+                height = 1.8; yPos = 2.0; 
+                geometry = new THREE.BoxGeometry(1.5, height, 1);
+                material = new THREE.MeshPhongMaterial({ color: 0x888800 }); 
+                typeName = 'Slide';
+                break;
+        }
+
+        const obstacle = new THREE.Mesh(geometry, material);
+        obstacle.position.set(xPos, yPos, OBSTACLE_Z_SPAWN);
+        obstacle.name = typeName; 
+        scene.add(obstacle);
+        obstacles.push(obstacle);
     }
 
-    const obstacle = new THREE.Mesh(geometry, material);
-    obstacle.position.set(xPos, yPos, OBSTACLE_Z_SPAWN);
-    obstacle.name = typeName; 
-    scene.add(obstacle);
-    obstacles.push(obstacle);
-
-    // Engel sıklığını artırdık: 0.5 ile 1.5 saniye arası yeni engel
-    state.nextObstacleTimer = Math.random() * 1.0 + 0.5; 
+    // Engel sıklığı artırıldı: 0.4 - 1.0 saniye arası
+    state.nextObstacleTimer = Math.random() * 0.6 + 0.4; 
 }
 
+// --- Turta Üretimi ---
+function generateTurtle() {
+    const xPos = OBSTACLE_LANE_X[Math.floor(Math.random() * 3)];
+    
+    // Geçici olarak yeşil bir küre (İleride modelle değiştirilebilir)
+    const geometry = new THREE.SphereGeometry(0.4, 16, 16);
+    const material = new THREE.MeshPhongMaterial({ color: 0x00ff00, emissive: 0x004400 });
+    const turtle = new THREE.Mesh(geometry, material);
+    
+    turtle.position.set(xPos, 0.5, OBSTACLE_Z_SPAWN);
+    scene.add(turtle);
+    turtles.push(turtle);
 
-// ... (startGame ve endGame aynı kaldı) ...
+    state.nextTurtleTimer = Math.random() * 2.0 + 1.5; 
+}
+
 function startGame() {
     state.isPlaying = true;
     state.score = 0;
+    state.turtlesCollected = 0;
     state.lane = 0;
     player.position.x = 0;
     player.position.y = 0.5;
     
     obstacles.forEach(o => scene.remove(o));
     obstacles.length = 0;
+    turtles.forEach(t => scene.remove(t));
+    turtles.length = 0;
 
     document.getElementById('start-screen').classList.add('hidden');
     document.getElementById('game-over-screen').classList.add('hidden');
@@ -169,83 +156,72 @@ function endGame() {
     document.getElementById('game-over-screen').classList.remove('hidden');
 }
 
-
-// --- Çarpışma Kontrolü (DÜZELTİLDİ) ---
-const COLLISION_RANGE_Z = 1.5; // Z ekseninde çarpışma mesafesi
-
+// --- Çarpışma ve Toplama Kontrolleri ---
 function checkCollisions() {
-    // Oyuncunun güncel bounding box'ını (sınır kutusunu) alıyoruz
     const playerBox = new THREE.Box3().setFromObject(player);
 
+    // Engellerle Çarpışma
     for (let i = obstacles.length - 1; i >= 0; i--) {
         const obstacle = obstacles[i];
-        
-        // Z Ekseninde Çarpışma Kontrolü (Engel, oyuncu hizasına geldi mi?)
-        if (Math.abs(player.position.z - obstacle.position.z) < COLLISION_RANGE_Z) {
-            
-            // X Ekseninde Şerit Kontrolü (Aynı şeritte mi?)
-            if (Math.abs(player.position.x - obstacle.position.x) < 1) {
-                
-                // Kutu Kutu Çarpışma Kontrolü (intersectsBox)
-                const obstacleBox = new THREE.Box3().setFromObject(obstacle);
-                
-                if (playerBox.intersectsBox(obstacleBox)) {
-                    
-                    if (obstacle.name === 'Jump') {
-                        // Zıplama Engeli (Mavi): Eğer Zıplıyorsa kurtulur. Zıplamıyorsa çarpışma var.
-                        // Zıplarken y pozisyonu 1.5'tan büyük olmalı. 
-                        if (player.position.y < 1.5) return endGame(); 
-                        
-                    } else if (obstacle.name === 'Slide') {
-                        // Kayma Engeli (Sarı): Eğer Kayıyorsa kurtulur.
-                        // Kayma anında karakterin Y pozisyonu düşük olmalı.
-                        // Yüksek engelin altından geçmek için kaymıyorsak çarpışma var.
-                        if (!state.isSliding) return endGame(); 
+        obstacle.position.z += state.speed;
 
-                    } else if (obstacle.name === 'Wall') {
-                        // Duvar Engeli (Kırmızı): Her türlü çarpışma.
-                        return endGame(); 
-                    }
+        if (Math.abs(player.position.z - obstacle.position.z) < 1.5) {
+            if (Math.abs(player.position.x - obstacle.position.x) < 1) {
+                const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+                if (playerBox.intersectsBox(obstacleBox)) {
+                    if (obstacle.name === 'Jump' && player.position.y < 1.5) return endGame();
+                    if (obstacle.name === 'Slide' && !state.isSliding) return endGame();
+                    if (obstacle.name === 'Wall') return endGame();
                 }
             }
         }
-        
-        // Engel çok geride kaldıysa sahneden kaldır
         if (obstacle.position.z > camera.position.z + 2) {
             scene.remove(obstacle);
             obstacles.splice(i, 1);
         }
     }
+
+    // Turtaları Toplama
+    for (let i = turtles.length - 1; i >= 0; i--) {
+        const turtle = turtles[i];
+        turtle.position.z += state.speed;
+        turtle.rotation.y += 0.05; // Döndürme efekti
+
+        const turtleBox = new THREE.Box3().setFromObject(turtle);
+        if (playerBox.intersectsBox(turtleBox)) {
+            state.turtlesCollected++;
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            scene.remove(turtle);
+            turtles.splice(i, 1);
+            continue;
+        }
+
+        if (turtle.position.z > camera.position.z + 2) {
+            scene.remove(turtle);
+            turtles.splice(i, 1);
+        }
+    }
 }
 
-
-// --- Zıplama/Kayma Mantığı (AYARLANDI) ---
-// Zıplama gücünü artırdık
+// --- Hareket Mantığı ---
 const JUMP_VELOCITY_START = 0.4; 
 const GRAVITY = -0.05; 
 let jumpVelocity = 0;
 
 function applyMovement(deltaTime) {
-    // Zıplama
     if (state.isJumping) {
         player.position.y += jumpVelocity * deltaTime;
         jumpVelocity += GRAVITY * deltaTime;
-
-        // Yere indi
         if (player.position.y <= 0.5) {
             player.position.y = 0.5;
             state.isJumping = false;
             jumpVelocity = 0;
-            player.scale.set(1, 1, 1); // Kayma sırasında zıplama biterse normal boya dön
         }
     }
-
-    // Kayma (Karakterin boyunu küçült ve pozisyonunu alçalt)
     if (state.isSliding) {
         player.scale.set(1, 0.5, 1); 
         player.position.y = 0.25; 
     } else if (!state.isJumping) {
-        // Kayma veya zıplama yoksa normale döndür
         player.scale.set(1, 1, 1); 
         player.position.y = 0.5;
     }
@@ -262,82 +238,51 @@ function animate(time) {
         state.score += 0.1 * deltaTime; 
         document.getElementById('score').innerText = Math.floor(state.score);
 
-        // Zemin ve İşaretleyicilerin Hareketi (Yol çizgilerinin kayma illüzyonu)
-        markerGroup.position.z += state.speed * deltaTime;
-        // Çizgileri belirli bir mesafede geriye at
-        if (markerGroup.position.z > (LINE_LENGTH + LINE_GAP)) { 
-            markerGroup.position.z = 0;
-        }
-
-        // Engel Hareketi
-        obstacles.forEach(obstacle => {
-            obstacle.position.z += state.speed * deltaTime;
-        });
-        
-        // Yeni Engel Zamanlayıcısı
+        // Engel ve Turta Üretimi
         state.nextObstacleTimer -= (0.01 * deltaTime);
-        if (state.nextObstacleTimer <= 0) {
-            generateObstacle();
-        }
+        if (state.nextObstacleTimer <= 0) generateObstacle();
 
-        // Oyuncu Hareketi ve Çarpışma
-        applyMovement(deltaTime);
+        state.nextTurtleTimer -= (0.01 * deltaTime);
+        if (state.nextTurtleTimer <= 0) generateTurtle();
+
         checkCollisions();
+        applyMovement(deltaTime);
 
-        // Oyuncu Şerit Hareketi
         const targetX = state.lane * 2; 
         player.position.x += (targetX - player.position.x) * 0.15 * deltaTime;
     }
-
     renderer.render(scene, camera);
 }
-
 
 // --- Kontroller ---
 window.addEventListener('keydown', (e) => {
     if (!state.isPlaying) return;
-
-    if (e.key === 'ArrowLeft' || e.key === 'a') {
-        if (state.lane > -1) state.lane--;
-    } 
-    else if (e.key === 'ArrowRight' || e.key === 'd') {
-        if (state.lane < 1) state.lane++;
-    }
-    // Zıplama Kontrolü
-    else if ((e.key === 'ArrowUp' || e.key === ' ') && !state.isJumping) {
+    if ((e.key === 'ArrowLeft' || e.key === 'a') && state.lane > -1) state.lane--;
+    if ((e.key === 'ArrowRight' || e.key === 'd') && state.lane < 1) state.lane++;
+    if ((e.key === 'ArrowUp' || e.key === ' ') && !state.isJumping) {
         state.isJumping = true;
         jumpVelocity = JUMP_VELOCITY_START; 
-        state.isSliding = false; 
     }
-    // Kayma Kontrolü
-    else if (e.key === 'ArrowDown' && !state.isJumping && !state.isSliding) {
+    if (e.key === 'ArrowDown' && !state.isJumping && !state.isSliding) {
         state.isSliding = true;
-        setTimeout(() => state.isSliding = false, 800); // Kayma süresini 0.8 saniyeye düşürdük
+        setTimeout(() => state.isSliding = false, 800);
     }
 });
 
-// Mobil Kontroller
 let touchStartX = 0;
 let touchStartY = 0;
 window.addEventListener('touchstart', e => {
     if (e.touches.length === 1) { 
-        // Sistemin (Telegram penceresi) aşağı çekmesini ENGELLE
         e.preventDefault(); 
         touchStartX = e.changedTouches[0].screenX;
         touchStartY = e.changedTouches[0].screenY;
     }
 }, {passive : false });
+
 window.addEventListener('touchend', e => {
     if (!state.isPlaying) return;
-    const touchEndX = e.changedTouches[0].screenX;
-    const touchEndY = e.changedTouches[0].screenY;
-    const dx = touchEndX - touchStartX;
-    const dy = touchEndY - touchStartY;
-
-    if (Math.abs(dx) < 30 && Math.abs(dy) < 30) {
-        // Çok kısa dokunuşlar, işlem yapma
-        return;
-    }
+    const dx = e.changedTouches[0].screenX - touchStartX;
+    const dy = e.changedTouches[0].screenY - touchStartY;
 
     if (Math.abs(dx) > Math.abs(dy)) {
         if (dx < -30 && state.lane > -1) state.lane--; 
@@ -346,7 +291,6 @@ window.addEventListener('touchend', e => {
         if (dy < -30 && !state.isJumping) { 
             state.isJumping = true;
             jumpVelocity = JUMP_VELOCITY_START; 
-            state.isSliding = false;
         } else if (dy > 30 && !state.isJumping && !state.isSliding) { 
             state.isSliding = true;
             setTimeout(() => state.isSliding = false, 800); 
@@ -354,8 +298,7 @@ window.addEventListener('touchend', e => {
     }
 });
 
-
-// ... (Diğer TON Olayları ve Butonlar aynı kaldı) ...
+// --- TON Olayları ---
 tonConnectUI.onStatusChange(async (wallet) => {
     if (wallet) {
         document.getElementById('btn-buy-reset').disabled = false;
@@ -367,12 +310,7 @@ tonConnectUI.onStatusChange(async (wallet) => {
 
 document.getElementById('btn-start').addEventListener('click', startGame);
 document.getElementById('btn-restart').addEventListener('click', startGame);
-
-document.getElementById('btn-buy-reset').addEventListener('click', async () => {
-    if(await purchasePlayReset()) {
-        alert("TON İşlemi Başarılı! (Test amaçlı harcama yapıldı)");
-    }
-});
+document.getElementById('btn-buy-reset').addEventListener('click', purchasePlayReset);
 
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -380,5 +318,4 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-initDailyLimits();
 animate();
