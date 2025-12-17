@@ -103,7 +103,7 @@ function generateObstacle() {
                 typeName = 'Jump';
                 break;
             case 2: // Kayma
-                height = 1.8; yPos = 1.7; 
+                height = 1.8; yPos = 1.5; 
                 geometry = new THREE.BoxGeometry(1.5, height, 1);
                 material = new THREE.MeshPhongMaterial({ color: 0x888800 }); 
                 typeName = 'Slide';
