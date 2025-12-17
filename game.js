@@ -318,15 +318,24 @@ window.addEventListener('keydown', (e) => {
 let touchStartX = 0;
 let touchStartY = 0;
 window.addEventListener('touchstart', e => {
-    touchStartX = e.changedTouches[0].screenX;
-    touchStartY = e.changedTouches[0].screenY;
-});
+    if (e.touches.length === 1) { 
+        // Sistemin (Telegram penceresi) aşağı çekmesini ENGELLE
+        e.preventDefault(); 
+        touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+    }
+}, {passive : false });
 window.addEventListener('touchend', e => {
     if (!state.isPlaying) return;
     const touchEndX = e.changedTouches[0].screenX;
     const touchEndY = e.changedTouches[0].screenY;
     const dx = touchEndX - touchStartX;
     const dy = touchEndY - touchStartY;
+
+    if (Math.abs(dx) < 30 && Math.abs(dy) < 30) {
+        // Çok kısa dokunuşlar, işlem yapma
+        return;
+    }
 
     if (Math.abs(dx) > Math.abs(dy)) {
         if (dx < -30 && state.lane > -1) state.lane--; 
