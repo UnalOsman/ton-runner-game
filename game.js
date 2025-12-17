@@ -17,6 +17,11 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
+// Bu satır, Mini App'in aşağı çekilerek kapatılmasını zorlaştırır/engeller
+if (tg.isVerticalSwipingEnabled) {
+    tg.disableVerticalSwiping();
+}
+
 // --- UI Güncellemeleri ---
 function updateUI() {
     const btnStart = document.getElementById('btn-start');
@@ -98,7 +103,7 @@ function generateObstacle() {
                 typeName = 'Jump';
                 break;
             case 2: // Kayma
-                height = 1.8; yPos = 2.0; 
+                height = 1.8; yPos = 1.8; 
                 geometry = new THREE.BoxGeometry(1.5, height, 1);
                 material = new THREE.MeshPhongMaterial({ color: 0x888800 }); 
                 typeName = 'Slide';
@@ -273,33 +278,26 @@ window.addEventListener('keydown', (e) => {
 let touchStartX = 0;
 let touchStartY = 0;
 window.addEventListener('touchstart', e => {
-    // Eğer dokunulan öğe bir BUTON veya TON CONNECT butonu ise engelleme (çalışsınlar)
-    const target = e.target;
-    if (target.tagName === 'BUTTON' || target.closest('#ton-connect-btn') || target.closest('.modal')) {
-        return; 
-    }
-    if (e.touches.length === 1) { 
-        e.preventDefault(); 
-        touchStartX = e.changedTouches[0].screenX;
-        touchStartY = e.changedTouches[0].screenY;
-    }
-}, {passive : false });
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+}, {passive : true });
 
 window.addEventListener('touchend', e => {
-    // Eğer butonlara tıklandıysa oyun hareketini tetikleme
-    const target = e.target;
-    if (target.tagName === 'BUTTON' || target.closest('#ton-connect-btn')) return;
-
     if (!state.isPlaying) return;
-    const dx = e.changedTouches[0].screenX - touchStartX;
-    const dy = e.changedTouches[0].screenY - touchStartY;
+    const touchEndX = e.changedTouches[0].screenX;
+    const touchEndY = e.changedTouches[0].screenY;
+    
+    const dx = touchEndX - touchStartX;
+    const dy = touchEndY - touchStartY;
 
-    // Hassasiyet eşiği (swipe algılama)
-    if (Math.abs(dx) > 20 || Math.abs(dy) > 20) {
+    // Minimum 30 piksellik bir hareket olması lazım (yanlışlıkla tıklamaları elemek için)
+    if (Math.abs(dx) > 30 || Math.abs(dy) > 30) {
         if (Math.abs(dx) > Math.abs(dy)) {
+            // Yatay Şerit Değiştirme
             if (dx < -30 && state.lane > -1) state.lane--; 
             if (dx > 30 && state.lane < 1) state.lane++; 
         } else {
+            // Dikey Zıplama/Kayma
             if (dy < -30 && !state.isJumping) { 
                 state.isJumping = true;
                 jumpVelocity = JUMP_VELOCITY_START; 
@@ -309,7 +307,7 @@ window.addEventListener('touchend', e => {
             }
         }
     }
-}, { passive: false });
+}, { passive: true });
 
 // --- TON Olayları ---
 tonConnectUI.onStatusChange(async (wallet) => {
