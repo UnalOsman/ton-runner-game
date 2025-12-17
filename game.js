@@ -190,6 +190,7 @@ function checkCollisions() {
         const turtleBox = new THREE.Box3().setFromObject(turtle);
         if (playerBox.intersectsBox(turtleBox)) {
             state.turtlesCollected++;
+            document.getElementById('turtle-count').innerText = state.turtlesCollected;
             if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             scene.remove(turtle);
             turtles.splice(i, 1);
@@ -259,11 +260,11 @@ window.addEventListener('keydown', (e) => {
     if (!state.isPlaying) return;
     if ((e.key === 'ArrowLeft' || e.key === 'a') && state.lane > -1) state.lane--;
     if ((e.key === 'ArrowRight' || e.key === 'd') && state.lane < 1) state.lane++;
-    if ((e.key === 'ArrowUp' || e.key === ' ') && !state.isJumping) {
+    if ((e.key === 'ArrowUp' || e.key === 'w') && !state.isJumping) {
         state.isJumping = true;
         jumpVelocity = JUMP_VELOCITY_START; 
     }
-    if (e.key === 'ArrowDown' && !state.isJumping && !state.isSliding) {
+    if ((e.key === 'ArrowDown' || e.key ==='s') && !state.isJumping && !state.isSliding) {
         state.isSliding = true;
         setTimeout(() => state.isSliding = false, 800);
     }
@@ -272,6 +273,11 @@ window.addEventListener('keydown', (e) => {
 let touchStartX = 0;
 let touchStartY = 0;
 window.addEventListener('touchstart', e => {
+    // Eğer dokunulan öğe bir BUTON veya TON CONNECT butonu ise engelleme (çalışsınlar)
+    const target = e.target;
+    if (target.tagName === 'BUTTON' || target.closest('#ton-connect-btn') || target.closest('.modal')) {
+        return; 
+    }
     if (e.touches.length === 1) { 
         e.preventDefault(); 
         touchStartX = e.changedTouches[0].screenX;
@@ -280,23 +286,30 @@ window.addEventListener('touchstart', e => {
 }, {passive : false });
 
 window.addEventListener('touchend', e => {
+    // Eğer butonlara tıklandıysa oyun hareketini tetikleme
+    const target = e.target;
+    if (target.tagName === 'BUTTON' || target.closest('#ton-connect-btn')) return;
+
     if (!state.isPlaying) return;
     const dx = e.changedTouches[0].screenX - touchStartX;
     const dy = e.changedTouches[0].screenY - touchStartY;
 
-    if (Math.abs(dx) > Math.abs(dy)) {
-        if (dx < -30 && state.lane > -1) state.lane--; 
-        if (dx > 30 && state.lane < 1) state.lane++; 
-    } else {
-        if (dy < -30 && !state.isJumping) { 
-            state.isJumping = true;
-            jumpVelocity = JUMP_VELOCITY_START; 
-        } else if (dy > 30 && !state.isJumping && !state.isSliding) { 
-            state.isSliding = true;
-            setTimeout(() => state.isSliding = false, 800); 
+    // Hassasiyet eşiği (swipe algılama)
+    if (Math.abs(dx) > 20 || Math.abs(dy) > 20) {
+        if (Math.abs(dx) > Math.abs(dy)) {
+            if (dx < -30 && state.lane > -1) state.lane--; 
+            if (dx > 30 && state.lane < 1) state.lane++; 
+        } else {
+            if (dy < -30 && !state.isJumping) { 
+                state.isJumping = true;
+                jumpVelocity = JUMP_VELOCITY_START; 
+            } else if (dy > 30 && !state.isJumping && !state.isSliding) { 
+                state.isSliding = true;
+                setTimeout(() => state.isSliding = false, 800); 
+            }
         }
     }
-});
+}, { passive: false });
 
 // --- TON Olayları ---
 tonConnectUI.onStatusChange(async (wallet) => {

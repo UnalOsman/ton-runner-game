@@ -29,7 +29,10 @@ body {
     z-index: 10; 
     pointer-events: none; /* ÖNEMLİ: Bu katman tıklamaları geçirir, böylece oyunu oynayabiliriz */
 }
-
+/* Butonlar ve modallar dokunmayı tekrar aktif etmeli */
+header, .modal, button, #ton-connect-btn { 
+    pointer-events: auto !important; 
+}
 /* Ama butonlar ve modallar tıklanabilir olmalı */
 header, .modal { pointer-events: auto; }
 
