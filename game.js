@@ -1,5 +1,37 @@
 import { tonConnectUI, checkNftOwnership, purchasePlayReset } from './ton-service.js';
 
+const tg = window.Telegram.WebApp;
+tg.expand();
+tg.ready();
+
+// --- 1. TELEGRAM KULLANICI ADINI ÇEKME ---
+// Telegram verisi var mı kontrol et
+const user = tg.initDataUnsafe.user;
+if (user) {
+    const usernameDisplay = document.getElementById('username-display');
+    if (usernameDisplay) {
+        // Kullanıcı adı varsa @ ile, yoksa First Name ile göster
+        if (user.username) {
+            usernameDisplay.innerText = "@" + user.username;
+        } else {
+            usernameDisplay.innerText = user.first_name;
+        }
+    }
+} else {
+    // Telegram dışından açıldıysa (Test amaçlı)
+    const usernameDisplay = document.getElementById('username-display');
+    if(usernameDisplay) usernameDisplay.innerText = "@TestUser";
+}
+
+// --- KAYDIRMA ENGELLEME (KAPANMA SORUNU İÇİN) ---
+if (tg.isVerticalSwipingEnabled) {
+    tg.disableVerticalSwiping();
+}
+document.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+}, { passive: false });
+
+// --- STATE ---
 const state = {
     isPlaying: false,
     score: 0,
@@ -11,26 +43,6 @@ const state = {
     nextObstacleTimer: 0.0,
     nextTurtleTimer: 2.0
 };
-
-const tg = window.Telegram.WebApp;
-tg.expand();
-tg.ready();
-
-// --- KRİTİK DÜZELTME: AŞAĞI KAYDIRMAYI ENGELLEME ---
-// Telegram'ın swipe-to-close özelliğini kapatır
-if (tg.isVerticalSwipingEnabled) {
-    tg.disableVerticalSwiping();
-}
-
-// Ekstra Güvenlik: Tarayıcı seviyesinde kaydırmayı engelle
-// Bu kod, parmağını sürüklediğinde sayfanın hareket etmesini (ve uygulamanın kapanmasını) önler.
-document.addEventListener('touchmove', function(e) {
-    // Sadece oyun alanı içindeyken engelle (UI'da kaydırma gerekirse diye)
-    // Ama şu an tüm ekranda engelliyoruz ki oyun oynarken kaza olmasın.
-    e.preventDefault();
-}, { passive: false }); // 'passive: false' bu işin çalışması için zorunludur!
-
-// ---------------------------------------------------
 
 // --- UI GÜNCELLEME ---
 function updateUI() {
@@ -131,14 +143,12 @@ function startGame() {
     document.getElementById('live-score').classList.remove('hidden');
 }
 
-// YENİ: Ana Menüye Dönüş Fonksiyonu
 function goToMainMenu() {
     state.isPlaying = false;
     document.getElementById('game-over-screen').classList.add('hidden');
     document.getElementById('start-screen').classList.remove('hidden');
     document.getElementById('live-score').classList.add('hidden');
     
-    // Arkaplanda temizlik
     obstacles.forEach(o => scene.remove(o));
     obstacles.length = 0;
     turtles.forEach(t => scene.remove(t));
@@ -150,7 +160,6 @@ function endGame() {
     state.isPlaying = false;
     if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
     
-    // Canlı skoru gizle, Bitiş ekranını aç
     document.getElementById('live-score').classList.add('hidden');
     document.getElementById('final-score').innerText = Math.floor(state.score);
     document.getElementById('game-over-screen').classList.remove('hidden');
@@ -186,7 +195,6 @@ function checkCollisions() {
     }
 }
 
-// Hareket ve Fizik
 const JUMP_VELOCITY_START = 0.4; 
 const GRAVITY = -0.05; 
 let jumpVelocity = 0;
@@ -264,7 +272,6 @@ window.addEventListener('touchend', e => {
     }
 }, { passive: true });
 
-// Event Listener
 tonConnectUI.onStatusChange(async (wallet) => {
     if (wallet) {
         document.getElementById('btn-buy-reset').disabled = false;
@@ -276,7 +283,6 @@ tonConnectUI.onStatusChange(async (wallet) => {
 
 document.getElementById('btn-start').addEventListener('click', startGame);
 document.getElementById('btn-restart').addEventListener('click', startGame);
-// YENİ: Ana Menü Butonu Bağlantısı
 document.getElementById('btn-home').addEventListener('click', goToMainMenu);
 document.getElementById('btn-buy-reset').addEventListener('click', purchasePlayReset);
 

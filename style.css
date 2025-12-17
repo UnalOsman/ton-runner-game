@@ -12,7 +12,7 @@ html, body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     user-select: none;
     background: var(--bg-gradient);
-    touch-action: none; /* Mobilde kaydırmayı engeller */
+    touch-action: none;
 }
 
 #game-container {
@@ -31,12 +31,14 @@ html, body {
     justify-content: space-between;
 }
 
-/* --- HEADER --- */
+/* --- HEADER (DÜZELTİLDİ: Padding Artırıldı) --- */
 header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 15px 20px;
+    /* Eski: padding: 15px 20px; */
+    /* Yeni: Üstten 50px boşluk bırakarak aşağı indirdik */
+    padding: 50px 20px 15px 20px; 
     pointer-events: auto;
 }
 
@@ -83,7 +85,6 @@ header {
     justify-content: center;
 }
 
-/* Pasif Damla Kutusu */
 .res-box.inactive {
     opacity: 0.8; 
     cursor: default;
@@ -92,7 +93,7 @@ header {
 /* --- OYUN İÇİ CANLI SKOR --- */
 #live-score {
     position: absolute;
-    top: 15%;
+    top: 15%; /* Header aşağı indiği için bunu da biraz orantılayabiliriz ama %15 iyidir */
     left: 50%;
     transform: translateX(-50%);
     font-size: 40px;
@@ -111,25 +112,16 @@ header {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-end; /* Alt kısıma yasla */
     padding-bottom: 20px;
     pointer-events: auto;
     background: rgba(255,255,255,0.0);
+    
+    /* Hayalet gidince menü çok aşağı çökmesin diye biraz üst boşluk verebiliriz */
+    padding-top: 100px; 
 }
 
-.character-display {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -60%);
-    text-align: center;
-}
-.character-circle {
-    width: 150px; height: 150px;
-    display: flex; align-items: center; justify-content: center;
-    background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);
-    border-radius: 50%;
-}
-
+/* Play Butonu */
 .play-container { margin-bottom: 15px; width: 80%; }
 
 .btn-play {
@@ -150,6 +142,7 @@ header {
 .btn-play.small { font-size: 18px; padding: 12px 0; }
 .btn-play:active { transform: scale(0.98); }
 
+/* Alt Butonlar */
 .sub-controls {
     display: flex;
     justify-content: center;
