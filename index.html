@@ -6,13 +6,10 @@
     <title>Bluppie Runner</title>
     
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="menu-style.css">
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -103,13 +100,13 @@
             </div>
             
             <div class="shop-section" style="margin-top:20px; border-top: 1px solid #eee; padding-top: 15px;">
+                <div id="nft-status" class="status-msg" style="color:#666; font-size: 12px; margin-bottom: 5px;">NFT Kontrol Ediliyor...</div>
                 <button id="btn-buy-reset" class="btn-pill" style="background:#444; color:white; width:100%; justify-content: center;" disabled>
-                    Can Yenile
+                    Can Yenile (0.05 TON)
                 </button>
             </div>
         </div>
-        
-        </div>
+    </div>
 
     <audio id="bgm-menu" loop>
         <source src="menu.mp3" type="audio/mpeg">
@@ -120,6 +117,6 @@
     </audio>
 
     <script type="module" src="ton-service.js"></script>
-    <script type="module" src="game.js?v=2.2"></script>
+    <script type="module" src="game.js?v=2.1"></script>
 </body>
 </html>

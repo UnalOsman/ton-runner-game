@@ -1,5 +1,4 @@
 import { tonConnectUI, checkNftOwnership, purchasePlayReset } from './ton-service.js';
-import { initMenuSystem } from './menu-system.js'; // YENİ: Menü Sistemini İçe Aktar
 
 const tg = window.Telegram.WebApp;
 tg.expand();
@@ -29,7 +28,7 @@ function switchMusic(type) {
     }
 }
 
-// Kullanıcı etkileşimiyle sesi aç (Tarayıcı politikası)
+// Kullanıcı etkileşimiyle sesi aç
 document.addEventListener('click', () => {
     if (!soundEnabled) {
         soundEnabled = true;
@@ -56,14 +55,15 @@ function loadUserData() {
         const saved = localStorage.getItem('bluppie_save_v2');
         if (saved) {
             const parsed = JSON.parse(saved);
+            // Veri bozuk mu kontrol et (NaN hatası önlemi)
             if (!isNaN(parsed.lives)) {
                 userData = parsed;
             }
         }
         calculateLives(); 
     } catch (e) {
-        console.error("Veri yükleme hatası:", e);
-        saveUserData();
+        console.error("Veri yükleme hatası, varsayılanlar kullanılıyor.", e);
+        saveUserData(); // Temiz veriyle üzerine yaz
     }
     updateMenuUI();
 }
@@ -89,6 +89,7 @@ function calculateLives() {
             userData.lives = Math.min(userData.lives + livesToRestore, MAX_LIVES);
             
             if (userData.lives < MAX_LIVES) {
+                // Kalan süreyi koruyarak zamanı güncelle
                 userData.lastLifeLostTime = now - (diff % RECHARGE_TIME_MS);
             } else {
                 userData.lastLifeLostTime = null;
@@ -96,6 +97,7 @@ function calculateLives() {
             saveUserData();
         }
     } else {
+        // Can eksik ama zamanlayıcı yoksa (Hata durumu), zamanlayıcıyı başlat
         userData.lastLifeLostTime = now;
         saveUserData();
     }
@@ -114,6 +116,7 @@ function updateMenuUI() {
     const btnStart = document.getElementById('btn-start');
     if (userData.lives <= 0) {
         btnStart.style.opacity = "0.6";
+        // Kalan dakikayı gösterelim
         if (userData.lastLifeLostTime) {
             const now = Date.now();
             const diff = now - userData.lastLifeLostTime;
@@ -123,6 +126,7 @@ function updateMenuUI() {
         } else {
             btnStart.innerText = "⏳ DOLUYOR...";
         }
+        // Disabled yapmıyoruz, tıklayınca uyarı versin diye
     } else {
         btnStart.style.opacity = "1";
         btnStart.innerText = "PLAY";
@@ -135,7 +139,8 @@ setInterval(() => {
         calculateLives();
         updateMenuUI();
     } else if (!state.isPlaying && userData.lives <= 0) {
-        updateMenuUI(); // Geri sayımı güncellemek için
+        // Can 0 ise saniye saniye geri sayımı güncellemek için
+        updateMenuUI();
     }
 }, 1000);
 
@@ -242,12 +247,13 @@ function generateTurtle() {
 // --- OYUN AKIŞI ---
 
 function startGame() {
-    // Buton tepkisi (Haptic)
+    // Butona basıldığında titreşim ver (Tepki verdiğini anlamak için)
     if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
 
-    // CAN KONTROLÜ
+    // CAN KONTROLÜ (TELEGRAM UYUMLU)
     if (userData.lives <= 0) {
-        tg.showAlert("Canın kalmadı! Canının dolması için beklemen veya satın alman gerekiyor.");
+        // TELEGRAM NATIVE ALERT KULLANIYORUZ
+        tg.showAlert("Canın kalmadı! Canının dolması için biraz beklemen gerekiyor.");
         return;
     }
 
@@ -290,16 +296,16 @@ function endGame() {
     
     switchMusic('menu');
 
-    // CAN DÜŞME
+    // CAN DÜŞME İŞLEMİ
     if (userData.lives > 0) {
         userData.lives--;
-        // İlk can kaybıysa zamanlayıcıyı başlat
+        // Eğer bu ilk can kaybıysa zamanlayıcıyı başlat
         if (userData.lives === MAX_LIVES - 1 || !userData.lastLifeLostTime) {
             userData.lastLifeLostTime = Date.now();
         }
     }
     
-    // KAYDET
+    // Verileri Kaydet
     userData.totalTurtles += state.turtlesCollected;
     if (state.score > userData.highScore) userData.highScore = Math.floor(state.score);
     saveUserData();
@@ -332,6 +338,7 @@ function goToMainMenu() {
     updateMenuUI();
 }
 
+// --- FİZİK ---
 function checkCollisions() {
     const playerBox = new THREE.Box3().setFromObject(player);
     for (let i = obstacles.length - 1; i >= 0; i--) {
@@ -383,12 +390,10 @@ function animate(time) {
     if (state.isPlaying && !state.isPaused) {
         state.score += 0.1 * deltaTime; 
         updateGameUI(); 
-        
         state.nextObstacleTimer -= (0.01 * deltaTime);
         if (state.nextObstacleTimer <= 0) generateObstacle();
         state.nextTurtleTimer -= (0.01 * deltaTime);
         if (state.nextTurtleTimer <= 0) generateTurtle();
-
         checkCollisions();
         applyMovement(deltaTime);
         const targetX = state.lane * 2; 
@@ -426,7 +431,7 @@ window.addEventListener('touchend', e => {
 document.getElementById('btn-start').addEventListener('click', startGame);
 document.getElementById('btn-restart').addEventListener('click', startGame);
 document.getElementById('btn-home').addEventListener('click', goToMainMenu);
-document.getElementById('btn-buy-reset').addEventListener('click', purchasePlayReset); // TON satın alma
+document.getElementById('btn-buy-reset').addEventListener('click', purchasePlayReset);
 document.getElementById('btn-pause').addEventListener('click', pauseGame);
 document.getElementById('btn-resume').addEventListener('click', resumeGame);
 document.getElementById('btn-quit').addEventListener('click', goToMainMenu);
@@ -437,6 +442,6 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// Oyuna başlarken veriyi güvenli yükle
 loadUserData();
-initMenuSystem(); // YENİ: Menü Sistemini Başlat
 animate();
