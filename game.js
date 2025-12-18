@@ -4,7 +4,41 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
-// --- 1. VERİ KAYIT SİSTEMİ (LocalStorage) ---
+// --- SES YÖNETİMİ ---
+const audioMenu = document.getElementById('bgm-menu');
+const audioGame = document.getElementById('bgm-game');
+// Tarayıcılar bazen otomatik sesi engeller, kullanıcı bir yere tıklayınca sesi açarız
+let soundEnabled = false;
+
+// Müziği Değiştirme Fonksiyonu
+function switchMusic(type) {
+    if (!soundEnabled) return; // Kullanıcı henüz etkileşime girmediyse çalma
+
+    if (type === 'menu') {
+        audioGame.pause();
+        audioGame.currentTime = 0; // Başa sar
+        audioMenu.play().catch(e => console.log("Otomatik oynatma engellendi"));
+    } else if (type === 'game') {
+        audioMenu.pause();
+        audioMenu.currentTime = 0;
+        audioGame.play().catch(e => console.log("Otomatik oynatma engellendi"));
+    } else if (type === 'stop') {
+        audioMenu.pause();
+        audioGame.pause();
+    }
+}
+
+// Kullanıcı ekrana ilk dokunduğunda sesleri aktifleştir (Tarayıcı politikası gereği)
+document.addEventListener('click', () => {
+    if (!soundEnabled) {
+        soundEnabled = true;
+        // Eğer menüdeysek menü müziğini başlat
+        if (!state.isPlaying) audioMenu.play().catch(e => {});
+    }
+}, { once: true });
+
+
+// --- KAYIT SİSTEMİ ---
 let userData = {
     totalTurtles: 0,
     highScore: 0
@@ -12,9 +46,7 @@ let userData = {
 
 function loadUserData() {
     const saved = localStorage.getItem('bluppie_save_v1');
-    if (saved) {
-        userData = JSON.parse(saved);
-    }
+    if (saved) userData = JSON.parse(saved);
     updateMenuUI();
 }
 
@@ -41,12 +73,13 @@ if (user) {
 if (tg.isVerticalSwipingEnabled) tg.disableVerticalSwiping();
 document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
 
+
 // --- OYUN STATE ---
 const state = {
     isPlaying: false,
-    isPaused: false, // Yeni: Duraklatma durumu
+    isPaused: false,
     score: 0,
-    turtlesCollected: 0, // Bu koşudaki turta
+    turtlesCollected: 0,
     lane: 0, 
     speed: 0.5,
     isJumping: false,
@@ -55,14 +88,12 @@ const state = {
     nextTurtleTimer: 2.0
 };
 
-// --- OYUN İÇİ UI GÜNCELLEME ---
 function updateGameUI() {
-    // Sadece oyun içindeki sayaçları güncelle
     document.getElementById('in-game-score').innerText = Math.floor(state.score).toString().padStart(5, '0');
     document.getElementById('in-game-turtles').innerText = state.turtlesCollected;
 }
 
-// --- Three.js Kurulumu (AYNI) ---
+// --- Three.js Kurulumu ---
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 scene.fog = new THREE.Fog(0x87CEEB, 10, 40);
@@ -132,7 +163,7 @@ function generateTurtle() {
     state.nextTurtleTimer = Math.random() * 2.0 + 1.5; 
 }
 
-// --- OYUN AKIŞI ---
+// --- OYUN AKIŞI (Müzik Entegrasyonu Eklendi) ---
 
 function startGame() {
     state.isPlaying = true;
@@ -142,13 +173,15 @@ function startGame() {
     state.lane = 0;
     player.position.x = 0;
     
-    // Temizlik
+    // Müzik Değiştir: GAME
+    soundEnabled = true; // Play'e basıldığı için ses kesin açılır
+    switchMusic('game');
+
     obstacles.forEach(o => scene.remove(o));
     obstacles.length = 0;
     turtles.forEach(t => scene.remove(t));
     turtles.length = 0;
 
-    // UI Değişimi: Menüyü Gizle, Oyun UI Göster
     document.getElementById('menu-header').classList.add('hidden');
     document.getElementById('start-screen').classList.add('hidden');
     document.getElementById('game-over-screen').classList.add('hidden');
@@ -158,11 +191,13 @@ function startGame() {
 function pauseGame() {
     if (!state.isPlaying) return;
     state.isPaused = true;
+    audioGame.pause(); // Duraklatınca müziği de durdur
     document.getElementById('pause-screen').classList.remove('hidden');
 }
 
 function resumeGame() {
     state.isPaused = false;
+    if (soundEnabled) audioGame.play(); // Devam edince müziği başlat
     document.getElementById('pause-screen').classList.add('hidden');
 }
 
@@ -170,14 +205,15 @@ function endGame() {
     state.isPlaying = false;
     if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
     
-    // Verileri Kaydet
+    // Müzik Değiştir: MENU (Veya durdurulabilir)
+    switchMusic('menu');
+
     userData.totalTurtles += state.turtlesCollected;
     if (state.score > userData.highScore) userData.highScore = Math.floor(state.score);
     saveUserData();
 
-    // UI Değişimi: Oyun UI Gizle, Sonuç Göster
     document.getElementById('game-ui').classList.add('hidden');
-    document.getElementById('menu-header').classList.remove('hidden'); // Header geri gelir
+    document.getElementById('menu-header').classList.remove('hidden');
     
     document.getElementById('final-score').innerText = Math.floor(state.score);
     document.getElementById('final-turtles').innerText = state.turtlesCollected;
@@ -187,6 +223,10 @@ function endGame() {
 function goToMainMenu() {
     state.isPlaying = false;
     state.isPaused = false;
+    
+    // Müzik Değiştir: MENU
+    switchMusic('menu');
+
     document.getElementById('game-over-screen').classList.add('hidden');
     document.getElementById('pause-screen').classList.add('hidden');
     document.getElementById('start-screen').classList.remove('hidden');
@@ -200,10 +240,8 @@ function goToMainMenu() {
     player.position.x = 0;
 }
 
-// --- FİZİK VE KONTROLLER ---
 function checkCollisions() {
     const playerBox = new THREE.Box3().setFromObject(player);
-    
     for (let i = obstacles.length - 1; i >= 0; i--) {
         const obstacle = obstacles[i];
         obstacle.position.z += state.speed;
@@ -215,7 +253,6 @@ function checkCollisions() {
         }
         if (obstacle.position.z > camera.position.z + 2) { scene.remove(obstacle); obstacles.splice(i, 1); }
     }
-
     for (let i = turtles.length - 1; i >= 0; i--) {
         const turtle = turtles[i];
         turtle.position.z += state.speed;
@@ -239,19 +276,10 @@ function applyMovement(deltaTime) {
     if (state.isJumping) {
         player.position.y += jumpVelocity * deltaTime;
         jumpVelocity += GRAVITY * deltaTime;
-        if (player.position.y <= 0.5) {
-            player.position.y = 0.5;
-            state.isJumping = false;
-            jumpVelocity = 0;
-        }
+        if (player.position.y <= 0.5) { player.position.y = 0.5; state.isJumping = false; jumpVelocity = 0; }
     }
-    if (state.isSliding) {
-        player.scale.set(1, 0.5, 1); 
-        player.position.y = 0.25; 
-    } else if (!state.isJumping) {
-        player.scale.set(1, 1, 1); 
-        player.position.y = 0.5;
-    }
+    if (state.isSliding) { player.scale.set(1, 0.5, 1); player.position.y = 0.25; } 
+    else if (!state.isJumping) { player.scale.set(1, 1, 1); player.position.y = 0.5; }
 }
 
 let lastTime = 0;
@@ -260,10 +288,9 @@ function animate(time) {
     const deltaTime = (time - lastTime) / 1000 * 60; 
     lastTime = time;
 
-    // Sadece oyun oynanıyorsa ve PAUSE DEĞİLSE güncelle
     if (state.isPlaying && !state.isPaused) {
         state.score += 0.1 * deltaTime; 
-        updateGameUI(); // Yeni UI güncellemesi
+        updateGameUI(); 
         
         state.nextObstacleTimer -= (0.01 * deltaTime);
         if (state.nextObstacleTimer <= 0) generateObstacle();
@@ -278,7 +305,6 @@ function animate(time) {
     renderer.render(scene, camera);
 }
 
-// Klavye
 window.addEventListener('keydown', (e) => {
     if (!state.isPlaying || state.isPaused) return;
     if ((e.key === 'ArrowLeft' || e.key === 'a') && state.lane > -1) state.lane--;
@@ -287,7 +313,6 @@ window.addEventListener('keydown', (e) => {
     if ((e.key === 'ArrowDown' || e.key ==='s') && !state.isJumping && !state.isSliding) { state.isSliding = true; setTimeout(() => state.isSliding = false, 800); }
 });
 
-// Dokunmatik
 let touchStartX = 0;
 let touchStartY = 0;
 window.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; touchStartY = e.changedTouches[0].screenY; }, {passive : true });
@@ -306,13 +331,10 @@ window.addEventListener('touchend', e => {
     }
 }, { passive: true });
 
-// Event Listenerlar
 document.getElementById('btn-start').addEventListener('click', startGame);
 document.getElementById('btn-restart').addEventListener('click', startGame);
 document.getElementById('btn-home').addEventListener('click', goToMainMenu);
 document.getElementById('btn-buy-reset').addEventListener('click', purchasePlayReset);
-
-// Pause Listenerları
 document.getElementById('btn-pause').addEventListener('click', pauseGame);
 document.getElementById('btn-resume').addEventListener('click', resumeGame);
 document.getElementById('btn-quit').addEventListener('click', goToMainMenu);
@@ -323,6 +345,5 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Başlangıç
-loadUserData(); // Kayıtlı veriyi yükle
+loadUserData();
 animate();
