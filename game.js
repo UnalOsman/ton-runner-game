@@ -27,7 +27,7 @@ function switchMusic(type) {
         console.log("Ses hatası:", e);
     }
 }
-
+/*
 // Kullanıcı etkileşimiyle sesi aç
 document.addEventListener('click', () => {
     if (!soundEnabled) {
@@ -41,7 +41,7 @@ document.addEventListener('touchstart', () => {
         if (!state.isPlaying) audioMenu.play().catch(()=>{});
     }
 }, { once: true });
-
+*/
 // --- VERİ VE CAN SİSTEMİ ---
 let userData = {
     totalTurtles: 0,
@@ -441,6 +441,56 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+// --- SPLASH SCREEN & LOADING MANTIĞI ---
+function initApp() {
+    const splash = document.getElementById('splash-screen');
+    const enterBtn = document.getElementById('btn-enter-game');
+    const loadingBar = document.getElementById('loading-bar');
+    const loadingText = document.getElementById('loading-text');
+
+    // 1. Adım: Sahte bir yükleme ilerlemesi (Gerçek yükleme ile de bağlanabilir)
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += Math.random() * 30;
+        if (progress >= 100) {
+            progress = 100;
+            clearInterval(interval);
+            
+            // Yükleme bitti, butonu göster
+            loadingBar.style.width = "100%";
+            loadingText.innerText = "HAZIR!";
+            enterBtn.classList.remove('hidden');
+        }
+        loadingBar.style.width = `${progress}%`;
+    }, 200);
+
+    // 2. Adım: Kullanıcı "GİRİŞ YAP" butonuna bastığında sesleri başlat
+    enterBtn.addEventListener('click', () => {
+        // Ses kilidini aç (Safari ve Telegram iOS için kritik)
+        soundEnabled = true;
+        
+        // Menü müziğini başlat
+        audioMenu.play().then(() => {
+            console.log("Müzik başarıyla başladı");
+        }).catch(err => {
+            console.log("Müzik çalma hatası:", err);
+        });
+
+        // Diğer sesi "prime" et (hazırda beklet)
+        audioGame.play().then(() => audioGame.pause());
+
+        // Splash ekranını kaldır
+        splash.style.opacity = '0';
+        setTimeout(() => splash.style.display = 'none', 500);
+
+        // Telegram Titreşimi
+        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+    });
+}
+
+// game.js'nin en sonunda çağır
+initApp();
 
 // Oyuna başlarken veriyi güvenli yükle
 loadUserData();
