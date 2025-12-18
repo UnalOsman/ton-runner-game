@@ -4,72 +4,118 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
+// --- AYARLAR ---
+const MAX_LIVES = 5;
+const RECHARGE_TIME_MS = 15 * 60 * 1000; // 15 Dakika (Test için 10000 yapabilirsin = 10 saniye)
+
 // --- SES YÖNETİMİ ---
 const audioMenu = document.getElementById('bgm-menu');
 const audioGame = document.getElementById('bgm-game');
-// Tarayıcılar bazen otomatik sesi engeller, kullanıcı bir yere tıklayınca sesi açarız
 let soundEnabled = false;
 
-// Müziği Değiştirme Fonksiyonu
 function switchMusic(type) {
-    if (!soundEnabled) return; // Kullanıcı henüz etkileşime girmediyse çalma
-
+    if (!soundEnabled) return;
     if (type === 'menu') {
-        audioGame.pause();
-        audioGame.currentTime = 0; // Başa sar
-        audioMenu.play().catch(e => console.log("Otomatik oynatma engellendi"));
+        audioGame.pause(); audioGame.currentTime = 0;
+        audioMenu.play().catch(()=>{});
     } else if (type === 'game') {
-        audioMenu.pause();
-        audioMenu.currentTime = 0;
-        audioGame.play().catch(e => console.log("Otomatik oynatma engellendi"));
-    } else if (type === 'stop') {
-        audioMenu.pause();
-        audioGame.pause();
+        audioMenu.pause(); audioMenu.currentTime = 0;
+        audioGame.play().catch(()=>{});
     }
 }
 
-// Kullanıcı ekrana ilk dokunduğunda sesleri aktifleştir (Tarayıcı politikası gereği)
 document.addEventListener('click', () => {
     if (!soundEnabled) {
         soundEnabled = true;
-        // Eğer menüdeysek menü müziğini başlat
-        if (!state.isPlaying) audioMenu.play().catch(e => {});
+        if (!state.isPlaying) audioMenu.play().catch(()=>{});
     }
 }, { once: true });
 
-
-// --- KAYIT SİSTEMİ ---
+// --- VERİ VE CAN SİSTEMİ ---
 let userData = {
     totalTurtles: 0,
-    highScore: 0
+    highScore: 0,
+    lives: MAX_LIVES,
+    lastLifeLostTime: null // Son can kaybı zamanı
 };
 
 function loadUserData() {
-    const saved = localStorage.getItem('bluppie_save_v1');
-    if (saved) userData = JSON.parse(saved);
+    const saved = localStorage.getItem('bluppie_save_v2'); // Versiyonu v2 yaptık
+    if (saved) {
+        userData = JSON.parse(saved);
+        calculateLives(); // Oyuna girince süreyi hesapla
+    }
     updateMenuUI();
 }
 
 function saveUserData() {
-    localStorage.setItem('bluppie_save_v1', JSON.stringify(userData));
+    localStorage.setItem('bluppie_save_v2', JSON.stringify(userData));
     updateMenuUI();
 }
 
-function updateMenuUI() {
-    const totalEl = document.getElementById('total-turtle-count');
-    if (totalEl) totalEl.innerText = userData.totalTurtles;
-}
+// Can Yenileme Mantığı
+function calculateLives() {
+    if (userData.lives >= MAX_LIVES) {
+        userData.lastLifeLostTime = null;
+        return;
+    }
 
-// Telegram Kullanıcı Adı
-const user = tg.initDataUnsafe.user;
-if (user) {
-    const usernameDisplay = document.getElementById('username-display');
-    if (usernameDisplay) {
-        usernameDisplay.innerText = user.username ? "@" + user.username : user.first_name;
+    const now = Date.now();
+    if (userData.lastLifeLostTime) {
+        const diff = now - userData.lastLifeLostTime;
+        const livesToRestore = Math.floor(diff / RECHARGE_TIME_MS);
+
+        if (livesToRestore > 0) {
+            userData.lives = Math.min(userData.lives + livesToRestore, MAX_LIVES);
+            
+            // Eğer hala eksik can varsa, son yenilenme zamanını güncelle
+            if (userData.lives < MAX_LIVES) {
+                userData.lastLifeLostTime = now - (diff % RECHARGE_TIME_MS);
+            } else {
+                userData.lastLifeLostTime = null;
+            }
+            saveUserData();
+        }
     }
 }
 
-// Kaydırma Engelleme
+function updateMenuUI() {
+    // Turta
+    const totalEl = document.getElementById('total-turtle-count');
+    if (totalEl) totalEl.innerText = userData.totalTurtles;
+    
+    // Can Göstergesi
+    const lifeEl = document.getElementById('play-count');
+    if (lifeEl) lifeEl.innerText = userData.lives;
+
+    // Play Butonu Kilidi
+    const btnStart = document.getElementById('btn-start');
+    if (userData.lives <= 0) {
+        btnStart.style.opacity = "0.5";
+        btnStart.innerText = "⏳ DOLUYOR...";
+        btnStart.disabled = true;
+    } else {
+        btnStart.style.opacity = "1";
+        btnStart.innerText = "PLAY";
+        btnStart.disabled = false;
+    }
+}
+
+// Her saniye can kontrolü yap (Menü açıkken süre dolsun diye)
+setInterval(() => {
+    if (!state.isPlaying && userData.lives < MAX_LIVES) {
+        calculateLives();
+        updateMenuUI();
+    }
+}, 1000);
+
+// Kullanıcı Adı
+const user = tg.initDataUnsafe.user;
+if (user) {
+    const usernameDisplay = document.getElementById('username-display');
+    if (usernameDisplay) usernameDisplay.innerText = user.username ? "@" + user.username : user.first_name;
+}
+
 if (tg.isVerticalSwipingEnabled) tg.disableVerticalSwiping();
 document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
 
@@ -93,7 +139,7 @@ function updateGameUI() {
     document.getElementById('in-game-turtles').innerText = state.turtlesCollected;
 }
 
-// --- Three.js Kurulumu ---
+// --- Three.js ---
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 scene.fog = new THREE.Fog(0x87CEEB, 10, 40);
@@ -163,9 +209,15 @@ function generateTurtle() {
     state.nextTurtleTimer = Math.random() * 2.0 + 1.5; 
 }
 
-// --- OYUN AKIŞI (Müzik Entegrasyonu Eklendi) ---
+// --- OYUN AKIŞI ---
 
 function startGame() {
+    // CAN KONTROLÜ
+    if (userData.lives <= 0) {
+        alert("Canın kalmadı! Biraz bekle veya marketten al.");
+        return;
+    }
+
     state.isPlaying = true;
     state.isPaused = false;
     state.score = 0;
@@ -173,8 +225,6 @@ function startGame() {
     state.lane = 0;
     player.position.x = 0;
     
-    // Müzik Değiştir: GAME
-    soundEnabled = true; // Play'e basıldığı için ses kesin açılır
     switchMusic('game');
 
     obstacles.forEach(o => scene.remove(o));
@@ -191,13 +241,13 @@ function startGame() {
 function pauseGame() {
     if (!state.isPlaying) return;
     state.isPaused = true;
-    audioGame.pause(); // Duraklatınca müziği de durdur
+    audioGame.pause();
     document.getElementById('pause-screen').classList.remove('hidden');
 }
 
 function resumeGame() {
     state.isPaused = false;
-    if (soundEnabled) audioGame.play(); // Devam edince müziği başlat
+    if (soundEnabled) audioGame.play();
     document.getElementById('pause-screen').classList.add('hidden');
 }
 
@@ -205,9 +255,18 @@ function endGame() {
     state.isPlaying = false;
     if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
     
-    // Müzik Değiştir: MENU (Veya durdurulabilir)
     switchMusic('menu');
 
+    // CAN DÜŞME İŞLEMİ
+    if (userData.lives > 0) {
+        userData.lives--;
+        // Eğer bu ilk can kaybıysa zamanlayıcıyı başlat
+        if (userData.lives === MAX_LIVES - 1) {
+            userData.lastLifeLostTime = Date.now();
+        }
+    }
+    
+    // Verileri Kaydet
     userData.totalTurtles += state.turtlesCollected;
     if (state.score > userData.highScore) userData.highScore = Math.floor(state.score);
     saveUserData();
@@ -223,8 +282,6 @@ function endGame() {
 function goToMainMenu() {
     state.isPlaying = false;
     state.isPaused = false;
-    
-    // Müzik Değiştir: MENU
     switchMusic('menu');
 
     document.getElementById('game-over-screen').classList.add('hidden');
@@ -238,8 +295,12 @@ function goToMainMenu() {
     turtles.forEach(t => scene.remove(t));
     turtles.length = 0;
     player.position.x = 0;
+    
+    // UI Güncelle (Can bilgisini yenile)
+    updateMenuUI();
 }
 
+// --- FİZİK ---
 function checkCollisions() {
     const playerBox = new THREE.Box3().setFromObject(player);
     for (let i = obstacles.length - 1; i >= 0; i--) {
@@ -291,12 +352,10 @@ function animate(time) {
     if (state.isPlaying && !state.isPaused) {
         state.score += 0.1 * deltaTime; 
         updateGameUI(); 
-        
         state.nextObstacleTimer -= (0.01 * deltaTime);
         if (state.nextObstacleTimer <= 0) generateObstacle();
         state.nextTurtleTimer -= (0.01 * deltaTime);
         if (state.nextTurtleTimer <= 0) generateTurtle();
-
         checkCollisions();
         applyMovement(deltaTime);
         const targetX = state.lane * 2; 
