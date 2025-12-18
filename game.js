@@ -6,7 +6,7 @@ tg.ready();
 
 // --- AYARLAR ---
 const MAX_LIVES = 5;
-const RECHARGE_TIME_MS = 15 * 60 * 1000; // 15 Dakika (Test için 10000 yapabilirsin = 10 saniye)
+const RECHARGE_TIME_MS = 15 * 60 * 1000; // 15 Dakika
 
 // --- SES YÖNETİMİ ---
 const audioMenu = document.getElementById('bgm-menu');
@@ -15,16 +15,27 @@ let soundEnabled = false;
 
 function switchMusic(type) {
     if (!soundEnabled) return;
-    if (type === 'menu') {
-        audioGame.pause(); audioGame.currentTime = 0;
-        audioMenu.play().catch(()=>{});
-    } else if (type === 'game') {
-        audioMenu.pause(); audioMenu.currentTime = 0;
-        audioGame.play().catch(()=>{});
+    try {
+        if (type === 'menu') {
+            audioGame.pause(); audioGame.currentTime = 0;
+            audioMenu.play().catch(()=>{});
+        } else if (type === 'game') {
+            audioMenu.pause(); audioMenu.currentTime = 0;
+            audioGame.play().catch(()=>{});
+        }
+    } catch (e) {
+        console.log("Ses hatası:", e);
     }
 }
 
+// Kullanıcı etkileşimiyle sesi aç
 document.addEventListener('click', () => {
+    if (!soundEnabled) {
+        soundEnabled = true;
+        if (!state.isPlaying) audioMenu.play().catch(()=>{});
+    }
+}, { once: true });
+document.addEventListener('touchstart', () => {
     if (!soundEnabled) {
         soundEnabled = true;
         if (!state.isPlaying) audioMenu.play().catch(()=>{});
@@ -36,14 +47,23 @@ let userData = {
     totalTurtles: 0,
     highScore: 0,
     lives: MAX_LIVES,
-    lastLifeLostTime: null // Son can kaybı zamanı
+    lastLifeLostTime: null 
 };
 
 function loadUserData() {
-    const saved = localStorage.getItem('bluppie_save_v2'); // Versiyonu v2 yaptık
-    if (saved) {
-        userData = JSON.parse(saved);
-        calculateLives(); // Oyuna girince süreyi hesapla
+    try {
+        const saved = localStorage.getItem('bluppie_save_v2');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            // Veri bozuk mu kontrol et (NaN hatası önlemi)
+            if (!isNaN(parsed.lives)) {
+                userData = parsed;
+            }
+        }
+        calculateLives(); 
+    } catch (e) {
+        console.error("Veri yükleme hatası, varsayılanlar kullanılıyor.", e);
+        saveUserData(); // Temiz veriyle üzerine yaz
     }
     updateMenuUI();
 }
@@ -68,14 +88,18 @@ function calculateLives() {
         if (livesToRestore > 0) {
             userData.lives = Math.min(userData.lives + livesToRestore, MAX_LIVES);
             
-            // Eğer hala eksik can varsa, son yenilenme zamanını güncelle
             if (userData.lives < MAX_LIVES) {
+                // Kalan süreyi koruyarak zamanı güncelle
                 userData.lastLifeLostTime = now - (diff % RECHARGE_TIME_MS);
             } else {
                 userData.lastLifeLostTime = null;
             }
             saveUserData();
         }
+    } else {
+        // Can eksik ama zamanlayıcı yoksa (Hata durumu), zamanlayıcıyı başlat
+        userData.lastLifeLostTime = now;
+        saveUserData();
     }
 }
 
@@ -88,23 +112,34 @@ function updateMenuUI() {
     const lifeEl = document.getElementById('play-count');
     if (lifeEl) lifeEl.innerText = userData.lives;
 
-    // Play Butonu Kilidi
+    // Play Butonu Görünümü
     const btnStart = document.getElementById('btn-start');
     if (userData.lives <= 0) {
-        btnStart.style.opacity = "0.5";
-        btnStart.innerText = "⏳ DOLUYOR...";
-        btnStart.disabled = true;
+        btnStart.style.opacity = "0.6";
+        // Kalan dakikayı gösterelim
+        if (userData.lastLifeLostTime) {
+            const now = Date.now();
+            const diff = now - userData.lastLifeLostTime;
+            const remaining = Math.max(0, RECHARGE_TIME_MS - diff);
+            const minutes = Math.ceil(remaining / 60000);
+            btnStart.innerText = `⏳ ${minutes}dk`;
+        } else {
+            btnStart.innerText = "⏳ DOLUYOR...";
+        }
+        // Disabled yapmıyoruz, tıklayınca uyarı versin diye
     } else {
         btnStart.style.opacity = "1";
         btnStart.innerText = "PLAY";
-        btnStart.disabled = false;
     }
 }
 
-// Her saniye can kontrolü yap (Menü açıkken süre dolsun diye)
+// Her saniye can kontrolü yap
 setInterval(() => {
     if (!state.isPlaying && userData.lives < MAX_LIVES) {
         calculateLives();
+        updateMenuUI();
+    } else if (!state.isPlaying && userData.lives <= 0) {
+        // Can 0 ise saniye saniye geri sayımı güncellemek için
         updateMenuUI();
     }
 }, 1000);
@@ -212,9 +247,13 @@ function generateTurtle() {
 // --- OYUN AKIŞI ---
 
 function startGame() {
-    // CAN KONTROLÜ
+    // Butona basıldığında titreşim ver (Tepki verdiğini anlamak için)
+    if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+
+    // CAN KONTROLÜ (TELEGRAM UYUMLU)
     if (userData.lives <= 0) {
-        alert("Canın kalmadı! Biraz bekle veya marketten al.");
+        // TELEGRAM NATIVE ALERT KULLANIYORUZ
+        tg.showAlert("Canın kalmadı! Canının dolması için biraz beklemen gerekiyor.");
         return;
     }
 
@@ -261,7 +300,7 @@ function endGame() {
     if (userData.lives > 0) {
         userData.lives--;
         // Eğer bu ilk can kaybıysa zamanlayıcıyı başlat
-        if (userData.lives === MAX_LIVES - 1) {
+        if (userData.lives === MAX_LIVES - 1 || !userData.lastLifeLostTime) {
             userData.lastLifeLostTime = Date.now();
         }
     }
@@ -296,7 +335,6 @@ function goToMainMenu() {
     turtles.length = 0;
     player.position.x = 0;
     
-    // UI Güncelle (Can bilgisini yenile)
     updateMenuUI();
 }
 
@@ -404,5 +442,6 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// Oyuna başlarken veriyi güvenli yükle
 loadUserData();
 animate();
