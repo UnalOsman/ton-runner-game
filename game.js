@@ -235,13 +235,32 @@ function generateObstacle() {
 
 function generateTurtle() {
     const xPos = OBSTACLE_LANE_X[Math.floor(Math.random() * 3)];
-    const geometry = new THREE.SphereGeometry(0.4, 16, 16);
-    const material = new THREE.MeshPhongMaterial({ color: 0x00ff00, emissive: 0x004400 });
-    const turtle = new THREE.Mesh(geometry, material);
-    turtle.position.set(xPos, 0.5, OBSTACLE_Z_SPAWN);
-    scene.add(turtle);
-    turtles.push(turtle);
-    state.nextTurtleTimer = Math.random() * 2.0 + 1.5; 
+
+    // GÜVENLİK KONTROLÜ: Yakınlarda engel var mı?
+    const isObstacleNear = obstacles.some(obs => {
+        return obs.position.x === xPos && Math.abs(obs.position.z - OBSTACLE_Z_SPAWN) < 10;
+    });
+
+    if (isObstacleNear) return; // Eğer yakınlarda engel varsa bu seferlik turta oluşturma
+
+    const groupSize = Math.floor(Math.random() * 3) + 3; // En az 3, en fazla 5 turta
+    const spacing = 2.5; // Turtalar arası mesafe (Z ekseninde)
+
+    for (let i = 0; i < groupSize; i++) {
+        const geometry = new THREE.SphereGeometry(0.4, 16, 16);
+        const material = new THREE.MeshPhongMaterial({ color: 0x00ff00, emissive: 0x004400 });
+        const turtle = new THREE.Mesh(geometry, material);
+        
+        // i * spacing kadar daha geride (eksi Z yönünde) oluşturarak sıraya diziyoruz
+        const zOffset = OBSTACLE_Z_SPAWN - (i * spacing);
+        
+        turtle.position.set(xPos, 0.5, zOffset);
+        scene.add(turtle);
+        turtles.push(turtle);
+    }
+    
+    // Bir sonraki grubun gelme süresini biraz daha kısalttık (Olasılığı artırdık)
+    state.nextTurtleTimer = Math.random() * 1.0 + 1.0; 
 }
 
 // --- OYUN AKIŞI ---
@@ -341,6 +360,8 @@ function goToMainMenu() {
 // --- FİZİK ---
 function checkCollisions() {
     const playerBox = new THREE.Box3().setFromObject(player);
+    const sfxPop = document.getElementById('sfx-pop');
+
     for (let i = obstacles.length - 1; i >= 0; i--) {
         const obstacle = obstacles[i];
         obstacle.position.z += state.speed;
@@ -359,6 +380,11 @@ function checkCollisions() {
         const turtleBox = new THREE.Box3().setFromObject(turtle);
         if (playerBox.intersectsBox(turtleBox)) {
             state.turtlesCollected++;
+            // SES ÇALDIRMA (Hızlı toplamalarda sesin üst üste binmesi için resetliyoruz)
+            if (soundEnabled) {
+                sfxPop.currentTime = 0;
+                sfxPop.play().catch(()=>{});
+            }
             if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
             scene.remove(turtle); turtles.splice(i, 1);
             continue;
@@ -392,7 +418,7 @@ function animate(time) {
         updateGameUI(); 
         state.nextObstacleTimer -= (0.01 * deltaTime);
         if (state.nextObstacleTimer <= 0) generateObstacle();
-        state.nextTurtleTimer -= (0.01 * deltaTime);
+        state.nextTurtleTimer -= (0.015 * deltaTime);
         if (state.nextTurtleTimer <= 0) generateTurtle();
         checkCollisions();
         applyMovement(deltaTime);
@@ -422,8 +448,28 @@ window.addEventListener('touchend', e => {
             if (dx < -30 && state.lane > -1) state.lane--; 
             if (dx > 30 && state.lane < 1) state.lane++; 
         } else {
-            if (dy < -30 && !state.isJumping) { state.isJumping = true; jumpVelocity = JUMP_VELOCITY_START; } 
-            else if (dy > 30 && !state.isJumping && !state.isSliding) { state.isSliding = true; setTimeout(() => state.isSliding = false, 800); }
+            // YUKARI SWIPE (Zıplama)
+            if (dy < -30) {
+                if (state.isSliding) state.isSliding = false; // Eğilmeyi iptal et
+                if (!state.isJumping) {
+                    state.isJumping = true;
+                    jumpVelocity = JUMP_VELOCITY_START;
+                }
+            } 
+            // AŞAĞI SWIPE (Ani İniş / Eğilme)
+            else if (dy > 30) {
+                if (state.isJumping) {
+                    // ANI İNİŞ: Zıplamayı kes ve yere çakıl
+                    state.isJumping = false;
+                    jumpVelocity = 0;
+                    player.position.y = 0.5;
+                }
+                if (!state.isSliding) {
+                    state.isSliding = true;
+                    // Eğer bir timeout varsa temizlemek için slidingTimer kullanabiliriz
+                    setTimeout(() => state.isSliding = false, 800);
+                }
+            }
         }
     }
 }, { passive: true });
@@ -445,48 +491,48 @@ window.addEventListener('resize', () => {
 // --- SPLASH SCREEN & LOADING MANTIĞI ---
 function initApp() {
     const splash = document.getElementById('splash-screen');
-    const enterBtn = document.getElementById('btn-enter-game');
+    const loadingContainer = document.getElementById('loading-container');
+    const tapToStart = document.getElementById('tap-to-start');
     const loadingBar = document.getElementById('loading-bar');
-    const loadingText = document.getElementById('loading-text');
+
+    let isLoaded = false;
 
     // 1. Adım: Sahte bir yükleme ilerlemesi (Gerçek yükleme ile de bağlanabilir)
     let progress = 0;
     const interval = setInterval(() => {
-        progress += Math.random() * 30;
+        progress += Math.random() * 25;
         if (progress >= 100) {
             progress = 100;
             clearInterval(interval);
             
-            // Yükleme bitti, butonu göster
-            loadingBar.style.width = "100%";
-            loadingText.innerText = "HAZIR!";
-            enterBtn.classList.remove('hidden');
+            // Yükleme bittiğinde: Barı gizle, Dokun başla alanını göster
+            loadingContainer.classList.add('hidden');
+            tapToStart.classList.remove('hidden');
+            isLoaded = true;
         }
         loadingBar.style.width = `${progress}%`;
-    }, 200);
+    }, 150);
 
-    // 2. Adım: Kullanıcı "GİRİŞ YAP" butonuna bastığında sesleri başlat
-    enterBtn.addEventListener('click', () => {
-        // Ses kilidini aç (Safari ve Telegram iOS için kritik)
+    // Tüm Splash ekranına dokunma olayı
+    splash.addEventListener('click', handleStart);
+    splash.addEventListener('touchstart', handleStart);
+
+    function handleStart() {
+        if (!isLoaded) return; // Yükleme bitmeden tıklanırsa bir şey yapma
+
+        // Müzikleri başlat
         soundEnabled = true;
+        audioMenu.play().catch(e => console.log("Müzik hatası:", e));
         
-        // Menü müziğini başlat
-        audioMenu.play().then(() => {
-            console.log("Müzik başarıyla başladı");
-        }).catch(err => {
-            console.log("Müzik çalma hatası:", err);
-        });
-
-        // Diğer sesi "prime" et (hazırda beklet)
+        // Diğer sesi hazırla
         audioGame.play().then(() => audioGame.pause());
 
-        // Splash ekranını kaldır
+        // Splash ekranını kapat
         splash.style.opacity = '0';
-        setTimeout(() => splash.style.display = 'none', 500);
+        setTimeout(() => splash.style.display = 'none', 800);
 
-        // Telegram Titreşimi
-        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
-    });
+        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+    }
 }
 
 // game.js'nin en sonunda çağır
