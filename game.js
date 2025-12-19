@@ -6,7 +6,7 @@ tg.ready();
 
 // --- AYARLAR ---
 const MAX_LIVES = 5;
-const RECHARGE_TIME_MS = 15 * 60 * 1000; // 15 Dakika
+const RECHARGE_TIME_MS = 0.1 * 60 * 1000; // 15 Dakika
 
 // --- SES YÖNETİMİ ---
 const audioMenu = document.getElementById('bgm-menu');
