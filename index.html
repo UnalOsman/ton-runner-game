@@ -14,13 +14,24 @@
 </head>
 <body>
     <div id="splash-screen">
+    <div class="bubble b1"></div>
+    <div class="bubble b2"></div>
+    <div class="bubble b3"></div>
+
     <div class="splash-content">
-        <h1 class="logo-text">BLUPPIE<span>RUNNER</span></h1>
-        <div id="loading-bar-container">
-            <div id="loading-bar"></div>
+        <h1 class="logo-text">BLUPPIE<br><span>RUNNER</span></h1>
+        
+        <div id="loading-container">
+            <div id="loading-bar-container">
+                <div id="loading-bar"></div>
+            </div>
+            <p id="loading-text">Yükleniyor...</p>
         </div>
-        <button id="btn-enter-game" class="btn-play small hidden">GİRİŞ YAP</button>
-        <p id="loading-text">Yükleniyor...</p>
+
+        <div id="tap-to-start" class="hidden">
+            <div class="pulse-circle"></div>
+            <p class="tap-text">BAŞLAMAK İÇİN DOKUN</p>
+        </div>
     </div>
 </div>
     <div id="game-container"></div>
@@ -124,6 +135,10 @@
     
     <audio id="bgm-game" loop>
         <source src="game.mp3" type="audio/mpeg">
+    </audio>
+
+    <audio id="sfx-pop">
+        <source src="pop.mp3" type="audio/mpeg">
     </audio>
 
     <script type="module" src="ton-service.js"></script>
