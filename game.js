@@ -573,6 +573,14 @@ function applyMovement(deltaTime) {
 let lastTime = 0;
 function animate(time) {
     requestAnimationFrame(animate);
+
+    // GÜVENLİK: Eğer oyun başlamadıysa veya assetler henüz gelmediyse hiçbir şeyi güncelleme
+    if (!state.isPlaying || state.isPaused || !window.isGameAssetsLoaded) {
+        // Sadece render al ki arka plan (yol/ışık) görünsün ama karakter/engel oluşmasın
+        renderer.render(scene, camera);
+        return; 
+    }
+    
     const deltaTime = (time - lastTime) / 1000 * 60; 
     lastTime = time;
 
