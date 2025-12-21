@@ -15,6 +15,26 @@ const audioGame = document.getElementById('bgm-game');
 const sfxPop = document.getElementById('sfx-pop');
 let soundEnabled = false;
 
+// Bu fonksiyon bir 'koruma kalkanı' görevi görür
+function safeHaptic(type = 'medium') {
+    // 1. Sürüm kontrolü yap (6.1 ve altı desteklemez)
+    // 2. Özelliğin var olup olmadığını kontrol et
+    if (tg.isVersionAtLeast('6.1') && tg.HapticFeedback) {
+        try {
+            if (type === 'error') {
+                tg.HapticFeedback.notificationOccurred('error');
+            } else {
+                tg.HapticFeedback.impactOccurred(type);
+            }
+        } catch (e) {
+            console.warn("Haptic hatası yoksayıldı:", e);
+        }
+    } else {
+        // Eğer sürüm eskiyse sadece konsola yaz, oyunu çökertme
+        console.log("Haptic desteklenmiyor, titreşim atlandı.");
+    }
+}
+
 function switchMusic(type) {
     if (!soundEnabled) return;
     try {
@@ -243,9 +263,10 @@ function initGameWorld() {
     // 2. KARAKTER
     if(gameAssets.player) {
         playerMesh = gameAssets.player;
-        playerMesh.scale.set(GLOBAL_SCALE, GLOBAL_SCALE, GLOBAL_SCALE);
-        playerMesh.rotation.y = Math.PI; // Kameraya arkasını dönsün
+        const pScale = 0.006; 
+        playerMesh.scale.set(pScale, pScale, pScale);
         playerMesh.position.y = 0;
+        playerMesh.rotation.y = Math.PI; // Kameraya arkasını dönsün
         
         scene.add(playerMesh);
 
@@ -257,6 +278,14 @@ function initGameWorld() {
         
         runAction.play();
     }
+
+    // initGameWorld içine ekle
+const testBox = new THREE.Mesh(
+    new THREE.BoxGeometry(2, 2, 2),
+    new THREE.MeshStandardMaterial({ color: 0xff0000 })
+);
+testBox.position.set(0, 1, -5);
+scene.add(testBox);
 }
 
 const obstacles = [];
@@ -276,39 +305,39 @@ function generateObstacle() {
         const xPos = availableLanes.splice(laneIdx, 1)[0];
         const obstacleType = Math.floor(Math.random() * 3); 
         
-        let mesh, typeName, scaleCorrection = GLOBAL_SCALE;
+        let mesh, typeName;
 
         switch(obstacleType) {
-            case 0: // ARABA (Wall - Zıplanmaz, Eğilinmez)
-                mesh = (Math.random() > 0.5 && gameAssets.car2) ? gameAssets.car2.clone() : gameAssets.car1.clone();
+            case 0: // ARABA (Wall)
+                mesh = (gameAssets.car2) ? gameAssets.car2.clone() : gameAssets.car1.clone();
                 typeName = 'Wall';
-                mesh.rotation.y = Math.PI; // Bize baksın
+                mesh.scale.set(0.008, 0.008, 0.008); // Karakterden küçük olması için küçülttük
+                mesh.rotation.y = Math.PI; // Eğer yan duruyorsa Math.PI / 2 veya 0 deneyerek düzeltilir
+                mesh.position.y = 0; // Yolun tam üstü
                 break;
-            case 1: // KÜTÜK (Jump - Üstünden Atla)
+            case 1: // KÜTÜK (Jump)
                 mesh = gameAssets.log.clone();
                 typeName = 'Jump';
-                mesh.rotation.y = Math.PI / 2; // Yan dursun
+                mesh.scale.set(0.01, 0.01, 0.01); 
+                mesh.rotation.y = Math.PI / 2; // Yolu enine kesecek şekilde
+                mesh.position.y = 0.5; // Kütüğün yarısı gömülüyse burayı artır (örn: 0.8)
                 break;
-            case 2: // ENGEL (Slide - Altından geç)
+            case 2: // ENGEL1 (Slide - Altından kayılan barikat)
                 mesh = gameAssets.barrier.clone();
                 typeName = 'Slide';
+                mesh.scale.set(0.012, 0.012, 0.012);
+                mesh.rotation.y = Math.PI / 2; // "Dik bakıyor" dediğin için 90 derece döndürdük
+                mesh.position.y = 0; 
                 break;
         }
 
         if(mesh) {
-            mesh.scale.set(scaleCorrection, scaleCorrection, scaleCorrection);
-            mesh.position.set(xPos, 0, OBSTACLE_Z_SPAWN);
+            mesh.position.set(xPos, mesh.position.y, OBSTACLE_Z_SPAWN);
             mesh.name = typeName;
-            
-            // Box3 hesaplaması için ön hazırlık (Bounding Box)
-            const box = new THREE.Box3().setFromObject(mesh);
-            mesh.userData.box = box; // Performans için cache
-
             scene.add(mesh);
             obstacles.push(mesh);
         }
-    }
-    state.nextObstacleTimer = Math.random() * 0.6 + 0.5; 
+    } 
 }
 
 function spawnScenery() {
@@ -321,18 +350,14 @@ function spawnScenery() {
         const leftItem = item.clone();
         const rightItem = item.clone();
         
-        leftItem.scale.set(GLOBAL_SCALE, GLOBAL_SCALE, GLOBAL_SCALE);
-        rightItem.scale.set(GLOBAL_SCALE, GLOBAL_SCALE, GLOBAL_SCALE);
+        // Evler küçükse 0.01'den 0.03 veya 0.05'e çıkar
+        const houseScale = 0.04; 
+        leftItem.scale.set(houseScale, houseScale, houseScale);
+        rightItem.scale.set(houseScale, houseScale, houseScale);
         
-        leftItem.position.set(-9, 0, OBSTACLE_Z_SPAWN); // Yol dışı sol
-        rightItem.position.set(9, 0, OBSTACLE_Z_SPAWN); // Yol dışı sağ
+        leftItem.position.set(-10, 0, OBSTACLE_Z_SPAWN); 
+        rightItem.position.set(10, 0, OBSTACLE_Z_SPAWN);
         
-        leftItem.rotation.y = Math.PI / 2; // Yola baksın
-        rightItem.rotation.y = -Math.PI / 2;
-
-        leftItem.name = "Scenery";
-        rightItem.name = "Scenery"; // Çarpışma kontrolünde yoksayılacak
-
         scene.add(leftItem); scene.add(rightItem);
         obstacles.push(leftItem); obstacles.push(rightItem);
     }
@@ -355,7 +380,9 @@ function generateTurtle() {
         let turtleMesh;
         if (gameAssets.turtle) {
             turtleMesh = gameAssets.turtle.clone();
-            turtleMesh.scale.set(GLOBAL_SCALE, GLOBAL_SCALE, GLOBAL_SCALE);
+            const tScale = 0.005; // Turtaları yarı yarıya küçülttük
+            turtleMesh.scale.set(tScale, tScale, tScale);
+            turtleMesh.position.y = 0.8; // Biraz havada durması iyidir
         } else {
             // Asset yüklenmezse yedek yeşil top
             const geo = new THREE.SphereGeometry(0.4);
@@ -378,10 +405,15 @@ function generateTurtle() {
 // --- OYUN AKIŞI ---
 
 function startGame() {
-    if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+    if(tg.HapticFeedback) safeHaptic('medium');
 
     if (userData.lives <= 0) {
-        tg.showAlert("Canın kalmadı! Canının dolması için biraz beklemen gerekiyor.");
+        // Eğer Telegram showAlert desteklemiyorsa normal tarayıcı alert'i kullan
+        if (tg.isVersionAtLeast('6.2')) {
+            tg.showAlert("Canın kalmadı! Canının dolması için biraz beklemen gerekiyor.");
+        } else {
+            alert("Canın kalmadı! Canının dolması için biraz beklemen gerekiyor.");
+        }
         return;
     }
 
@@ -434,7 +466,7 @@ function resumeGame() {
 
 function endGame() {
     state.isPlaying = false;
-    if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+    if(tg.HapticFeedback) safeHaptic('error');
     switchMusic('menu');
 
     if (userData.lives > 0) {
@@ -528,7 +560,7 @@ function checkCollisions() {
             
             // Pop sesi
             if (soundEnabled) { sfxPop.currentTime = 0; sfxPop.play().catch(()=>{}); }
-            if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            if (tg.HapticFeedback) safeHaptic('light');
             
             scene.remove(turtle); turtles.splice(i, 1);
             continue;
@@ -580,40 +612,33 @@ function animate(time) {
         renderer.render(scene, camera);
         return; 
     }
-    
+
     const deltaTime = (time - lastTime) / 1000 * 60; 
     lastTime = time;
 
-    // Animasyon Mikseri Güncelleme (Animation Mixer)
-    if(mixer && clock) {
-        const delta = clock.getDelta();
-        mixer.update(delta);
+    if (mixer && clock) {
+        mixer.update(clock.getDelta());
     }
 
-    if (state.isPlaying && !state.isPaused) {
-        state.score += 0.1 * deltaTime; 
-        updateGameUI(); 
-        
-        state.nextObstacleTimer -= (0.01 * deltaTime);
-        if (state.nextObstacleTimer <= 0) generateObstacle();
-        
-        // Daha sık turta gelmesi için katsayı arttırıldı
-        state.nextTurtleTimer -= (0.015 * deltaTime);
-        if (state.nextTurtleTimer <= 0) generateTurtle();
-        
-        checkCollisions();
-        applyMovement(deltaTime);
-        
-        // Yol döngüsü (FBX parçaları)
-        if(roadParts.length > 0) {
-            roadParts.forEach(part => {
-                part.position.z += state.speed;
-                if(part.position.z > 20) { // Kamera arkasına geçtiyse
-                    part.position.z -= 100; // En arkaya at (5 parça * 20br)
-                }
-            });
-        }
-    }
+    // Oyun mantığı sadece her şey hazırsa çalışır
+    state.score += 0.1 * deltaTime; 
+    updateGameUI(); 
+    
+    state.nextObstacleTimer -= (0.01 * deltaTime);
+    if (state.nextObstacleTimer <= 0) generateObstacle();
+    
+    state.nextTurtleTimer -= (0.015 * deltaTime);
+    if (state.nextTurtleTimer <= 0) generateTurtle();
+    
+    checkCollisions();
+    applyMovement(deltaTime);
+    
+    // Yol döngüsü
+    roadParts.forEach(part => {
+        part.position.z += state.speed;
+        if(part.position.z > 20) part.position.z -= 100;
+    });
+
     renderer.render(scene, camera);
 }
 
@@ -637,7 +662,7 @@ function initApp() {
 
         splash.style.opacity = '0';
         setTimeout(() => splash.style.display = 'none', 800);
-        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+        if(tg.HapticFeedback) safeHaptic('medium');
     });
 
     // Assetleri yüklemeye başla
