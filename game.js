@@ -6,7 +6,7 @@ tg.ready();
 
 // --- AYARLAR VE SABİTLER ---
 const MAX_LIVES = 5;
-const RECHARGE_TIME_MS = 15 * 60 * 1000; 
+const RECHARGE_TIME_MS = 0.1 * 60 * 1000; 
 const GLOBAL_SCALE = 0.01; // FBX modelleri çok büyükse bunu küçült (örn: 0.01), küçükse büyüt.
 
 // --- SES YÖNETİMİ ---
@@ -167,16 +167,16 @@ const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerH
 camera.position.set(0, 3, 7);
 camera.lookAt(0, 1, 0);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPrerence : "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true; // Gölgeleri açtık
+renderer.shadowMap.enabled = false; // Gölgeleri açtık
 document.getElementById('game-container').appendChild(renderer.domElement);
 
-const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
 scene.add(light);
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
 dirLight.position.set(5, 10, 7);
-dirLight.castShadow = true;
+dirLight.castShadow = false;
 scene.add(dirLight);
 
 // --- ASSET LOADER ---
@@ -237,6 +237,7 @@ function loadAllAssets() {
 // --- OYUN DÜNYASI KURULUMU ---
 let roadParts = [];
 let playerMesh; // Fiziksel değil, görsel model
+let lastSceneryZ = -60; // En son eklenen binanın Z pozisyonu
 
 function initGameWorld() {
     // 1. ZEMİN (Sonsuz Döngü İçin)
@@ -279,22 +280,33 @@ function initGameWorld() {
         runAction.play();
     }
 
-    // initGameWorld içine ekle
-const testBox = new THREE.Mesh(
-    new THREE.BoxGeometry(2, 2, 2),
-    new THREE.MeshStandardMaterial({ color: 0xff0000 })
-);
-testBox.position.set(0, 1, -5);
-scene.add(testBox);
+    // YAN ZEMİNLER (Evlerin altına çimen/toprak görünümü)
+    const sideFloorGeo = new THREE.PlaneGeometry(100, 500); // Çok uzun ve geniş
+    const sideFloorMat = new THREE.MeshPhongMaterial({ color: 0x3d8c40 }); // Yeşil çimen rengi
+    
+    const leftFloor = new THREE.Mesh(sideFloorGeo, sideFloorMat);
+    leftFloor.rotation.x = -Math.PI / 2;
+    leftFloor.position.set(-55, -0.05, -100); // Yolun hemen soluna, çok hafif aşağıya
+    scene.add(leftFloor);
+
+    const rightFloor = new THREE.Mesh(sideFloorGeo, sideFloorMat);
+    rightFloor.rotation.x = -Math.PI / 2;
+    rightFloor.position.set(55, -0.05, -100); // Yolun hemen sağına
+    scene.add(rightFloor);
 }
 
 const obstacles = [];
 const turtles = [];
 const OBSTACLE_Z_SPAWN = -60; 
-const OBSTACLE_LANE_X = [-2, 0, 2]; 
+const OBSTACLE_LANE_X = [-1.5, 0, 1.5]; 
 
 function generateObstacle() {
-    const obstacleCount = Math.random() > 0.7 ? 2 : 1;
+
+    // 1. ZAMANLAYICIYI RESETLE (Üst üste binmeyi önleyen en kritik yer)
+    // Engeller arası mesafeyi açmak için timer'ı artırıyoruz
+    state.nextObstacleTimer = 1.2 + Math.random() * 1; // Daha seyrek engel
+
+    const obstacleCount = Math.random() > 0.5 ? 2 : 1;
     const availableLanes = [...OBSTACLE_LANE_X];
     
     // ÇEVRE BİNALARI (Scenery)
@@ -311,23 +323,23 @@ function generateObstacle() {
             case 0: // ARABA (Wall)
                 mesh = (gameAssets.car2) ? gameAssets.car2.clone() : gameAssets.car1.clone();
                 typeName = 'Wall';
-                mesh.scale.set(0.008, 0.008, 0.008); // Karakterden küçük olması için küçülttük
-                mesh.rotation.y = Math.PI; // Eğer yan duruyorsa Math.PI / 2 veya 0 deneyerek düzeltilir
-                mesh.position.y = 0; // Yolun tam üstü
+                mesh.scale.set(0.008, 0.01, 0.01); // Karakterden küçük olması için küçülttük
+                mesh.rotation.y = Math.PI/2; // Eğer yan duruyorsa Math.PI / 2 veya 0 deneyerek düzeltilir
+                mesh.position.y = 1; // Yolun tam üstü
                 break;
             case 1: // KÜTÜK (Jump)
                 mesh = gameAssets.log.clone();
                 typeName = 'Jump';
-                mesh.scale.set(0.01, 0.01, 0.01); 
+                mesh.scale.set(0.008, 0.02, 0.01); 
                 mesh.rotation.y = Math.PI / 2; // Yolu enine kesecek şekilde
-                mesh.position.y = 0.5; // Kütüğün yarısı gömülüyse burayı artır (örn: 0.8)
+                mesh.position.y = 0.2; // Kütüğün yarısı gömülüyse burayı artır (örn: 0.8)
                 break;
             case 2: // ENGEL1 (Slide - Altından kayılan barikat)
                 mesh = gameAssets.barrier.clone();
                 typeName = 'Slide';
                 mesh.scale.set(0.012, 0.012, 0.012);
                 mesh.rotation.y = Math.PI / 2; // "Dik bakıyor" dediğin için 90 derece döndürdük
-                mesh.position.y = 0; 
+                mesh.position.y = 1; 
                 break;
         }
 
@@ -341,65 +353,65 @@ function generateObstacle() {
 }
 
 function spawnScenery() {
-    if(Math.random() > 0.4 || !gameAssets.houses) return;
+    // if(Math.random() > 0.3) satırını sildik, artık her engel dalgasında bina gelecek
+    if(!gameAssets.houses || gameAssets.houses.length === 0) return;
     
-    const sceneryList = [...gameAssets.houses, gameAssets.tree1, gameAssets.tree2];
-    const item = sceneryList[Math.floor(Math.random() * sceneryList.length)];
-    
+    const item = gameAssets.houses[Math.floor(Math.random() * gameAssets.houses.length)];
     if(item) {
         const leftItem = item.clone();
         const rightItem = item.clone();
-        
-        // Evler küçükse 0.01'den 0.03 veya 0.05'e çıkar
-        const houseScale = 0.04; 
+        const houseScale = 0.008; 
         leftItem.scale.set(houseScale, houseScale, houseScale);
         rightItem.scale.set(houseScale, houseScale, houseScale);
         
-        leftItem.position.set(-10, 0, OBSTACLE_Z_SPAWN); 
-        rightItem.position.set(10, 0, OBSTACLE_Z_SPAWN);
+        leftItem.position.set(-12, 0, OBSTACLE_Z_SPAWN); 
+        rightItem.position.set(12, 0, OBSTACLE_Z_SPAWN);
         
+        leftItem.rotation.y = Math.PI / 2; 
+        rightItem.rotation.y = -Math.PI / 2;
+        leftItem.name = "Scenery"; rightItem.name = "Scenery";
         scene.add(leftItem); scene.add(rightItem);
         obstacles.push(leftItem); obstacles.push(rightItem);
     }
 }
+// animate fonksiyonu içinde binalar silindikçe lastSceneryZ'yi de güncellemeliyiz 
+// veya daha basitçe: checkCollisions içinde bina silindiğinde bu değeri resetlemeliyiz.
+// En garantisi generateObstacle içinden spawnScenery'yi çağırmaya devam etmektir.
+
 
 function generateTurtle() {
     const xPos = OBSTACLE_LANE_X[Math.floor(Math.random() * 3)];
     
-    // GÜVENLİK: Engel üstüne turta koyma
+    // GÜVENLİK: Engellerin olduğu Z koordinatının 10 birim önünü ve arkasını kontrol et
     const isObstacleNear = obstacles.some(obs => {
-        return obs.name !== "Scenery" && obs.position.x === xPos && Math.abs(obs.position.z - OBSTACLE_Z_SPAWN) < 10;
+        if (obs.name === "Scenery") return false; // Evleri engel sayma
+        // Aynı şeritte mi ve Z mesafesi 10 birimden az mı?
+        return obs.position.x === xPos && Math.abs(obs.position.z - OBSTACLE_Z_SPAWN) < 15;
     });
-    if (isObstacleNear) return;
 
-    // SIRALI TURTA OLUŞTURMA (3-5 Adet)
+    if (isObstacleNear) {
+        // Eğer engel varsa bu seferlik turta oluşturma veya Z'yi ötele
+        return; 
+    }
+
     const groupSize = Math.floor(Math.random() * 3) + 3;
     const spacing = 2.5;
 
     for (let i = 0; i < groupSize; i++) {
-        let turtleMesh;
-        if (gameAssets.turtle) {
-            turtleMesh = gameAssets.turtle.clone();
-            const tScale = 0.005; // Turtaları yarı yarıya küçülttük
-            turtleMesh.scale.set(tScale, tScale, tScale);
-            turtleMesh.position.y = 0.8; // Biraz havada durması iyidir
-        } else {
-            // Asset yüklenmezse yedek yeşil top
-            const geo = new THREE.SphereGeometry(0.4);
-            const mat = new THREE.MeshBasicMaterial({color:0x00ff00});
-            turtleMesh = new THREE.Mesh(geo, mat);
-        }
+        let turtleMesh = gameAssets.turtle ? gameAssets.turtle.clone() : null;
+        if (!turtleMesh) return;
 
-        const zOffset = OBSTACLE_Z_SPAWN - (i * spacing);
-        turtleMesh.position.set(xPos, 0.5, zOffset);
+        const tScale = 0.005;
+        turtleMesh.scale.set(tScale, tScale, tScale);
         
-        // Animasyon için rastgele başlangıç açısı
-        turtleMesh.rotation.y = Math.random() * Math.PI;
+        // Z pozisyonunu engelden iyice uzağa set ediyoruz
+        const zOffset = OBSTACLE_Z_SPAWN - (i * spacing);
+        turtleMesh.position.set(xPos, 0.8, zOffset);
         
         scene.add(turtleMesh);
         turtles.push(turtleMesh);
     }
-    state.nextTurtleTimer = Math.random() * 1.0 + 1.0; 
+    state.nextTurtleTimer = 1.5 + Math.random() * 2; 
 }
 
 // --- OYUN AKIŞI ---
@@ -429,7 +441,7 @@ function startGame() {
         playerMesh.position.x = 0;
         playerMesh.position.z = 0;
     }
-    
+    lastSceneryZ = -60;
     switchMusic('game');
 
     // Temizlik
@@ -513,58 +525,87 @@ function updateGameUI() {
 }
 
 // --- FİZİK VE ÇARPIŞMA ---
+// Performans için değişkenleri dışarıda tanımlıyoruz (Garbage Collection dostu)
+const playerBox = new THREE.Box3();
+const obstacleBox = new THREE.Box3();
+const turtleBox = new THREE.Box3();
+
 function checkCollisions() {
     if(!playerMesh) return;
 
-    // Player Box (Biraz küçültüyoruz ki adil olsun)
-    const playerBox = new THREE.Box3().setFromObject(playerMesh);
-    // Box'ı biraz daralt (Tolerans)
-    playerBox.expandByScalar(-0.3); 
+    // Oyuncu kutusunu güncelle
+    playerBox.setFromObject(playerMesh);
+    playerBox.expandByScalar(-0.3); // Tolerans
 
-    // ENGELLER
+    // ENGELLER İÇİN DÖNGÜ
+    // Döngüyü tersten kuruyoruz ki silme işlemi sorun çıkarmasın
     for (let i = obstacles.length - 1; i >= 0; i--) {
         const obstacle = obstacles[i];
+        
+        // 1. Hareket Ettir
         obstacle.position.z += state.speed;
 
-        // Scenery (Evler) çarpışma dışı
-        if (obstacle.name === "Scenery") {
-             if (obstacle.position.z > camera.position.z + 5) { scene.remove(obstacle); obstacles.splice(i, 1); }
-             continue;
+        // 2. Çok uzaktaysa sil (Performans temizliği)
+        if (obstacle.position.z > camera.position.z + 10) { 
+            scene.remove(obstacle); 
+            obstacles.splice(i, 1);
+            continue; 
         }
 
-        // Çarpışma Kontrolü
-        if (Math.abs(playerMesh.position.z - obstacle.position.z) < 2 && Math.abs(playerMesh.position.x - obstacle.position.x) < 1) {
-            const obstacleBox = new THREE.Box3().setFromObject(obstacle);
-            obstacleBox.expandByScalar(-0.2); // Engel toleransı
+        // 3. Scenery (Evler) için çarpışma hesaplama (BOŞUNA İŞLEMCİ YORMA)
+        if (obstacle.name === "Scenery") continue;
 
-            if (playerBox.intersectsBox(obstacleBox)) {
-                // Mantıksal kontroller
-                if (obstacle.name === 'Wall') return endGame();
-                if (obstacle.name === 'Jump' && playerMesh.position.y < 1.0) return endGame(); // Yeterince zıplamamış
-                if (obstacle.name === 'Slide' && !state.isSliding) return endGame(); // Eğilmemiş
+        // 4. Mesafe Kontrolü (Sadece yakınsa detaylı çarpışma bak)
+        // Eğer Z mesafesi 2 birimden azsa ve X şeridi aynıysa çarpışma var mı diye bak
+        const zDiff = Math.abs(playerMesh.position.z - obstacle.position.z);
+        const xDiff = Math.abs(playerMesh.position.x - obstacle.position.x);
+
+        if (zDiff < 1.5 && xDiff < 0.8) {
+            // Basit kutu kontrolü yerine direkt mesafeden vurduk sayabiliriz
+            // Ama tip kontrolü için detaylara bakalım:
+            
+            if (obstacle.name === 'Wall') {
+                 return endGame();
+            }
+            if (obstacle.name === 'Jump') {
+                // Eğer karakter havada değilse (y < 0.5) çarptı
+                if (playerMesh.position.y < 0.8) return endGame();
+            }
+            if (obstacle.name === 'Slide') {
+                // Eğer karakter kaymıyorsa çarptı
+                if (!state.isSliding) return endGame();
             }
         }
-        
-        if (obstacle.position.z > camera.position.z + 5) { scene.remove(obstacle); obstacles.splice(i, 1); }
     }
 
-    // TURTALAR
+    // TURTALAR İÇİN DÖNGÜ
     for (let i = turtles.length - 1; i >= 0; i--) {
         const turtle = turtles[i];
         turtle.position.z += state.speed;
-        turtle.rotation.y += 0.05; // Dönme efekti
-        
-        const turtleBox = new THREE.Box3().setFromObject(turtle);
-        if (playerBox.intersectsBox(turtleBox)) {
+        turtle.rotation.y += 0.05;
+
+        // Basit Mesafe Kontrolü (Box3 yerine matematiksel mesafe daha hızlıdır)
+        const distZ = Math.abs(playerMesh.position.z - turtle.position.z);
+        const distX = Math.abs(playerMesh.position.x - turtle.position.x);
+
+        // Eğer yeterince yakınsa topla (0.8 birim mesafe)
+        if (distZ < 0.8 && distX < 0.8) {
             state.turtlesCollected++;
+
+            if(soundEnabled){
+            // KRİTİK DÜZELTME: Sesi durdur ve başa sar
+            sfxPop.pause(); 
+            sfxPop.currentTime = 0; 
             
-            // Pop sesi
-            if (soundEnabled) { sfxPop.currentTime = 0; sfxPop.play().catch(()=>{}); }
+            // Kısa bir gecikme olmadan (0ms) tekrar oynat
+            sfxPop.play().catch(e => console.log("Ses çalma hatası:", e));
+            }
             if (tg.HapticFeedback) safeHaptic('light');
             
             scene.remove(turtle); turtles.splice(i, 1);
             continue;
         }
+
         if (turtle.position.z > camera.position.z + 5) { scene.remove(turtle); turtles.splice(i, 1); }
     }
 }
@@ -598,7 +639,7 @@ function applyMovement(deltaTime) {
     }
 
     // Şerit hareketi (Lerp - Yumuşak geçiş)
-    const targetX = state.lane * 2; 
+    const targetX = state.lane * 1.5; 
     playerMesh.position.x += (targetX - playerMesh.position.x) * 0.2 * deltaTime;
 }
 
