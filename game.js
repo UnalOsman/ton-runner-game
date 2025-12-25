@@ -32,7 +32,7 @@ initAudioPool();
 function playPopSound() {
     if(!soundEnabled) return;
     // Müsait olan (çalmıyan) bir ses bul
-    const sound = popSounds.find(s => s.isPaused);
+    const sound = popSounds.find(s => s.paused);
     if(sound) {
         sound.play().catch(()=>{});
     } else {
@@ -154,8 +154,8 @@ document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: fal
 // --- OYUN STATE ---
 const state = {
     isPlaying: false, isPaused: false, score: 0, turtlesCollected: 0,
-    lane: 0, speed: 0.5, isJumping: false, isSliding: false,
-    nextObstacleTimer: 0.0, nextTurtleTimer: 2.0
+    lane: 0, speed: 12, isJumping: false, isSliding: false,
+    nextObstacleTimer: 1.2, nextTurtleTimer: 2.0
 };
 
 // --- THREE.JS GÖRSEL İYİLEŞTİRME (EN ÖNEMLİ KISIM) ---
@@ -320,8 +320,8 @@ function spawnSceneryAt(zPos) {
     rightItem.scale.set(houseScale, houseScale, houseScale);
     
     // Yolun kenarına yerleştir
-    leftItem.position.set(-10, 0, zPos); 
-    rightItem.position.set(10, 0, zPos);
+    leftItem.position.set(-9, 0, zPos); 
+    rightItem.position.set(9, 0, zPos);
     
     leftItem.rotation.y = Math.PI / 2; 
     rightItem.rotation.y = -Math.PI / 2;
@@ -386,7 +386,7 @@ function generateTurtle() {
     
     // Güvenlik kontrolü: Aynı şeritte yakın engel var mı?
     const isObstacleNear = obstacles.some(obs => {
-        return obs.position.x === xPos || Math.abs(obs.position.z - OBSTACLE_Z_SPAWN) < 25;
+        return obs.position.x === xPos || Math.abs(obs.position.z - OBSTACLE_Z_SPAWN) < 15;
     });
 
     if (isObstacleNear) return; 
@@ -427,7 +427,7 @@ function startGame() {
     state.score = 0;
     state.turtlesCollected = 0;
     state.lane = 0;
-    state.speed = 0.5;
+    state.speed = 20;
     
     if(playerMesh) {
         playerMesh.position.x = 0;
@@ -519,13 +519,13 @@ function updateGameUI() {
 }
 
 // --- FİZİK VE ÇARPIŞMA ---
-function checkCollisions() {
+function checkCollisions(deltaTime) {
     if(!playerMesh) return;
 
     // 1. ENGELLER (Obstacles)
     for (let i = obstacles.length - 1; i >= 0; i--) {
         const obstacle = obstacles[i];
-        obstacle.position.z += state.speed;
+        obstacle.position.z += state.speed * deltaTime;
 
         if (obstacle.position.z > camera.position.z + 5) { 
             scene.remove(obstacle); 
@@ -551,7 +551,7 @@ function checkCollisions() {
     // 2. EVLER (Scenery) - Sadece hareket ettir ve sil, çarpışma yok
     for (let i = sceneryObjects.length - 1; i >= 0; i--) {
         const obj = sceneryObjects[i];
-        obj.position.z += state.speed;
+        obj.position.z += state.speed * deltaTime;
         if (obj.position.z > camera.position.z + 10) {
             scene.remove(obj);
             sceneryObjects.splice(i, 1);
@@ -561,7 +561,7 @@ function checkCollisions() {
     // 3. TURTALAR
     for (let i = turtles.length - 1; i >= 0; i--) {
         const turtle = turtles[i];
-        turtle.position.z += state.speed;
+        turtle.position.z += state.speed * deltaTime;
         turtle.rotation.y += 0.05;
 
         const distZ = Math.abs(playerMesh.position.z - turtle.position.z);
@@ -579,9 +579,12 @@ function checkCollisions() {
     }
 }
 
-const JUMP_VELOCITY_START = 0.4; 
-const GRAVITY = -0.05; 
+const JUMP_VELOCITY_START = 8; 
+const GRAVITY = -25; 
 let jumpVelocity = 0;
+const LANE_WIDTH = 1.5;
+const LANE_CHANGE_SPEED = 12; // ← kritik değer
+
 
 function applyMovement(deltaTime) {
     if(!playerMesh) return;
@@ -603,8 +606,11 @@ function applyMovement(deltaTime) {
         playerMesh.position.y = 0;
     }
 
-    const targetX = state.lane * 1.5; 
-    playerMesh.position.x += (targetX - playerMesh.position.x) * 0.2 * deltaTime;
+    const targetX = state.lane * LANE_WIDTH;
+    const diff = targetX - playerMesh.position.x;
+
+    playerMesh.position.x += diff * Math.min(1, LANE_CHANGE_SPEED * deltaTime);
+    
 }
 
 let lastTime = 0;
@@ -616,26 +622,26 @@ function animate(time) {
         return; 
     }
 
-    const deltaTime = (time - lastTime) / 1000 * 60; 
+    const deltaTime = (time - lastTime) / 1000 ; 
     lastTime = time;
 
-    if (mixer && clock) mixer.update(clock.getDelta());
+    if (mixer) mixer.update(deltaTime);
 
-    state.score += 0.1 * deltaTime; 
+    state.score += 5 * deltaTime; 
     updateGameUI(); 
     
-    state.nextObstacleTimer -= (0.02 * deltaTime);
+    state.nextObstacleTimer -=  deltaTime;
     if (state.nextObstacleTimer <= 0) generateObstacle();
     
-    state.nextTurtleTimer -= (0.015 * deltaTime);
+    state.nextTurtleTimer -= deltaTime;
     if (state.nextTurtleTimer <= 0) generateTurtle();
     
-    checkCollisions();
+    checkCollisions(deltaTime);
     applyMovement(deltaTime);
     
     // YOL DÖNGÜSÜ (EVLER BURADA OLUŞUYOR)
     roadParts.forEach(part => {
-        part.position.z += state.speed;
+        part.position.z += state.speed * deltaTime;
         if(part.position.z > 20) {
             part.position.z -= 120; // 6 parça * 20br = 120 geri at
             // Yol en başa gittiğinde yanına ev koy
