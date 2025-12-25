@@ -32,7 +32,7 @@ initAudioPool();
 function playPopSound() {
     if(!soundEnabled) return;
     // Müsait olan (çalmıyan) bir ses bul
-    const sound = popSounds.find(s => s.paused);
+    const sound = popSounds.find(s => s.isPaused);
     if(sound) {
         sound.play().catch(()=>{});
     } else {
@@ -272,7 +272,7 @@ function initGameWorld() {
     // 2. KARAKTER
     if(gameAssets.player) {
         playerMesh = gameAssets.player;
-        const pScale = 0.006; 
+        const pScale = 0.005; 
         playerMesh.scale.set(pScale, pScale, pScale);
         playerMesh.position.y = 0;
         playerMesh.rotation.y = Math.PI; 
@@ -292,13 +292,13 @@ function initGameWorld() {
     const sideFloorMat = new THREE.MeshPhongMaterial({ color: 0x3d8c40 }); 
     const leftFloor = new THREE.Mesh(sideFloorGeo, sideFloorMat);
     leftFloor.rotation.x = -Math.PI / 2;
-    leftFloor.position.set(-105, -0.1, -100); 
+    leftFloor.position.set(-90, -0.1, -100); 
     leftFloor.receiveShadow = true;
     scene.add(leftFloor);
 
     const rightFloor = new THREE.Mesh(sideFloorGeo, sideFloorMat);
     rightFloor.rotation.x = -Math.PI / 2;
-    rightFloor.position.set(105, -0.1, -100); 
+    rightFloor.position.set(90, -0.1, -100); 
     rightFloor.receiveShadow = true;
     scene.add(rightFloor);
 }
@@ -314,14 +314,14 @@ function spawnSceneryAt(zPos) {
     // Her iki tarafa da koyuyoruz
     const leftItem = item.clone();
     const rightItem = item.clone();
-    const houseScale = 0.008; 
+    const houseScale = 0.01; 
     
     leftItem.scale.set(houseScale, houseScale, houseScale);
     rightItem.scale.set(houseScale, houseScale, houseScale);
     
     // Yolun kenarına yerleştir
-    leftItem.position.set(-14, 0, zPos); 
-    rightItem.position.set(14, 0, zPos);
+    leftItem.position.set(-10, 0, zPos); 
+    rightItem.position.set(10, 0, zPos);
     
     leftItem.rotation.y = Math.PI / 2; 
     rightItem.rotation.y = -Math.PI / 2;
@@ -335,7 +335,7 @@ function spawnSceneryAt(zPos) {
 
 function generateObstacle() {
     // Zamanlayıcıyı resetle
-    state.nextObstacleTimer = 1 + Math.random() * 1.5;
+    state.nextObstacleTimer = 0.6 + Math.random() * 1;
 
     const obstacleCount = Math.random() > 0.5 ? 2 : 1;
     const availableLanes = [...OBSTACLE_LANE_X];
@@ -386,7 +386,7 @@ function generateTurtle() {
     
     // Güvenlik kontrolü: Aynı şeritte yakın engel var mı?
     const isObstacleNear = obstacles.some(obs => {
-        return obs.position.x === xPos || Math.abs(obs.position.z - OBSTACLE_Z_SPAWN) < 15;
+        return obs.position.x === xPos || Math.abs(obs.position.z - OBSTACLE_Z_SPAWN) < 25;
     });
 
     if (isObstacleNear) return; 
@@ -624,7 +624,7 @@ function animate(time) {
     state.score += 0.1 * deltaTime; 
     updateGameUI(); 
     
-    state.nextObstacleTimer -= (0.01 * deltaTime);
+    state.nextObstacleTimer -= (0.02 * deltaTime);
     if (state.nextObstacleTimer <= 0) generateObstacle();
     
     state.nextTurtleTimer -= (0.015 * deltaTime);
