@@ -222,27 +222,55 @@ manager.onLoad = function () {
 };
 
 function loadAllAssets() {
-    // KARAKTER & ANIMASYONLAR
-    fbxLoader.load('assets/karakterler/blup3run.fbx', (obj) => { gameAssets.player = obj; });
-    fbxLoader.load('assets/karakterler/blup3jump.fbx', (obj) => { gameAssets.animJump = obj.animations[0]; });
-    fbxLoader.load('assets/karakterler/blup3rolling.fbx', (obj) => { gameAssets.animRoll = obj.animations[0]; });
+
+    // KARAKTER
+    fbxLoader.load('assets/karakterler/blup3run.fbx', obj => gameAssets.player = obj);
+    fbxLoader.load('assets/karakterler/blup3jump.fbx', obj => gameAssets.animJump = obj.animations[0]);
+    fbxLoader.load('assets/karakterler/blup3rolling.fbx', obj => gameAssets.animRoll = obj.animations[0]);
 
     // ENGELLER
-    fbxLoader.load('assets/engeller/araba1.fbx', (obj) => { gameAssets.car1 = obj; });
-    fbxLoader.load('assets/engeller/araba2.fbx', (obj) => { gameAssets.car2 = obj; });
-    fbxLoader.load('assets/engeller/kütük.fbx', (obj) => { gameAssets.log = obj; });
-    fbxLoader.load('assets/engeller/engel1.fbx', (obj) => { gameAssets.barrier = obj; });
+    fbxLoader.load('assets/engeller/araba1.fbx', obj => gameAssets.car1 = obj);
+    fbxLoader.load('assets/engeller/araba2.fbx', obj => gameAssets.car2 = obj);
+    fbxLoader.load('assets/engeller/kütük.fbx', obj => gameAssets.log = obj);
+    fbxLoader.load('assets/engeller/engel1.fbx', obj => gameAssets.barrier = obj);
 
     // TOPLANABİLİR
-    fbxLoader.load('assets/karakterler/blupturta.fbx', (obj) => { gameAssets.turtle = obj; });
+    fbxLoader.load('assets/karakterler/blupturta.fbx', obj => gameAssets.turtle = obj);
 
-    // ZEMİN & YAPILAR
-    fbxLoader.load('assets/zeminler/blupyol.fbx', (obj) => { gameAssets.road = obj; });
-    gameAssets.houses = [];
-    for(let i=1; i<=6; i++) {
-        fbxLoader.load(`assets/yapilar/blupHouse${i}.fbx`, (obj) => { gameAssets.houses.push(obj); });
-    }
+    // YOL
+    fbxLoader.load('assets/zeminler/blupyol.fbx', obj => gameAssets.road = obj);
+
+    // BÜYÜK YAPILAR
+    [
+        'blupHouse1','blupHouse2','blupHouse3',
+        'blupHouse4','blupHouse5','blupHouse6',
+        'blupotopark'
+    ].forEach(name => {
+        fbxLoader.load(`assets/yapilar/${name}.fbx`, obj => {
+            structures.buildings.push(obj);
+        });
+    });
+
+    // DOLDURUCU OBJELER
+    ['bluplamba','blupTree1','blupTree2'].forEach(name => {
+        fbxLoader.load(`assets/yapilar/${name}.fbx`, obj => {
+            structures.fillers.push(obj);
+        });
+    });
+
+    // ÜST GEÇİT
+    fbxLoader.load('assets/yapilar/blupgecit.fbx', obj => {
+        structures.overpass = obj;
+    });
 }
+
+
+function placeOnGround(mesh) {
+    const box = new THREE.Box3().setFromObject(mesh);
+    const offset = box.min.y;
+    mesh.position.y -= offset;
+}
+
 
 // --- OYUN DÜNYASI KURULUMU ---
 let roadParts = [];
@@ -254,6 +282,23 @@ const turtles = [];
 
 const OBSTACLE_Z_SPAWN = -60; 
 const OBSTACLE_LANE_X = [-1.5, 0, 1.5]; 
+
+// --- YAPI SİSTEMİ ---
+const STRUCTURE_OFFSET_X = 9;
+const STRUCTURE_SCALE = 0.01;
+
+const structures = {
+    buildings: [],   // ev, otopark
+    fillers: [],     // ağaç, lamba
+    overpass: null   // üst geçit
+};
+
+function getObjectWidthX(object) {
+    const box = new THREE.Box3().setFromObject(object);
+    return box.max.x - box.min.x;
+}
+
+
 
 function initGameWorld() {
     // 1. ZEMİN
@@ -303,35 +348,78 @@ function initGameWorld() {
     scene.add(rightFloor);
 }
 
+
 // --- ÜRETİM FONKSİYONLARI ---
 
-function spawnSceneryAt(zPos) {
-    if(!gameAssets.houses || gameAssets.houses.length === 0) return;
+function spawnCityRow(zPos) {
 
-    // Yolun sağına veya soluna rastgele binalar
-    const item = gameAssets.houses[Math.floor(Math.random() * gameAssets.houses.length)];
-    
-    // Her iki tarafa da koyuyoruz
-    const leftItem = item.clone();
-    const rightItem = item.clone();
-    const houseScale = 0.01; 
-    
-    leftItem.scale.set(houseScale, houseScale, houseScale);
-    rightItem.scale.set(houseScale, houseScale, houseScale);
-    
-    // Yolun kenarına yerleştir
-    leftItem.position.set(-9, 0, zPos); 
-    rightItem.position.set(9, 0, zPos);
-    
-    leftItem.rotation.y = Math.PI / 2; 
-    rightItem.rotation.y = -Math.PI / 2;
-    
-    scene.add(leftItem); 
-    scene.add(rightItem);
-    
-    // ÖNEMLİ: Bunları sceneryObjects dizisine atıyoruz, obstacles'a DEĞİL
-    sceneryObjects.push(leftItem, rightItem);
+    [-1, 1].forEach(side => {
+
+        // ===== EV =====
+        const building = structures.buildings[
+            Math.floor(Math.random() * structures.buildings.length)
+        ].clone();
+
+        building.scale.set(STRUCTURE_SCALE, STRUCTURE_SCALE, STRUCTURE_SCALE);
+        building.rotation.y = side === -1 ? Math.PI / 2 : -Math.PI / 2;
+        building.position.set(side * STRUCTURE_OFFSET_X, 0, zPos);
+        placeOnGround(building);
+
+        scene.add(building);
+        sceneryObjects.push(building);
+
+        // ===== EV GENİŞLİĞİ (GERÇEK DEĞER) =====
+        const buildingWidth = getObjectWidthX(building);
+
+        // ===== AĞAÇ / LAMBA (EVLER ARASI, ÖN TARAF) =====
+        if (structures.fillers.length && Math.random() > 0.3) {
+
+            const filler = structures.fillers[
+                Math.floor(Math.random() * structures.fillers.length)
+            ].clone();
+
+            filler.scale.set(STRUCTURE_SCALE, STRUCTURE_SCALE, STRUCTURE_SCALE);
+            filler.rotation.y = building.rotation.y;
+
+            /*
+              Mantık:
+              - Ev merkezinden
+              - Ev genişliğinin YARISI kadar dışarı
+              - Üstüne güvenli boşluk ekle
+            */
+            const safeGap = 0.6;
+
+            filler.position.set(
+                side * (STRUCTURE_OFFSET_X + buildingWidth / 2 + safeGap),
+                0,
+                zPos + (Math.random() * 1.5 - 0.75) // evle aynı hizada, arkaya düşmez
+            );
+
+            placeOnGround(filler);
+
+            scene.add(filler);
+            sceneryObjects.push(filler);
+        }
+    });
 }
+
+
+
+
+function spawnOverpass(zPos) {
+    if (!structures.overpass) return;
+
+    const bridge = structures.overpass.clone();
+    bridge.scale.set(STRUCTURE_SCALE, STRUCTURE_SCALE, STRUCTURE_SCALE);
+    bridge.position.set(0, 0, zPos);
+    bridge.rotation.y = -Math.PI/2;
+
+    placeOnGround(bridge);
+
+    scene.add(bridge);
+    sceneryObjects.push(bridge);
+}
+
 
 function generateObstacle() {
     // Zamanlayıcıyı resetle
@@ -351,9 +439,9 @@ function generateObstacle() {
             case 0: // ARABA 
                 mesh = (gameAssets.car2) ? gameAssets.car2.clone() : gameAssets.car1.clone();
                 typeName = 'Wall';
-                mesh.scale.set(0.015, 0.015, 0.008); 
+                mesh.scale.set(0.015, 0.01, 0.008); 
                 mesh.rotation.y = Math.PI/2; 
-                mesh.position.y = 1.5; 
+                mesh.position.y = 1.2; 
                 break;
             case 1: // KÜTÜK (Jump)
                 mesh = gameAssets.log.clone();
@@ -641,13 +729,19 @@ function animate(time) {
     
     // YOL DÖNGÜSÜ (EVLER BURADA OLUŞUYOR)
     roadParts.forEach(part => {
-        part.position.z += state.speed * deltaTime;
-        if(part.position.z > 20) {
-            part.position.z -= 120; // 6 parça * 20br = 120 geri at
-            // Yol en başa gittiğinde yanına ev koy
-            spawnSceneryAt(part.position.z);
+    part.position.z += state.speed * deltaTime;
+
+    if (part.position.z > 20) {
+        part.position.z -= 120;
+
+        if (Math.random() < 0.15) {
+            spawnOverpass(part.position.z);
+        } else {
+            spawnCityRow(part.position.z);
         }
-    });
+    }
+});
+
 
     renderer.render(scene, camera);
 }
