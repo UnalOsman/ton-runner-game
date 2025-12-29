@@ -16,7 +16,7 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FBXLoader.js"></script>
 </head>
 <body>
-    <div id="splash-screen">
+    <!--<div id="splash-screen">
     <div class="bubble b1"></div>
     <div class="bubble b2"></div>
     <div class="bubble b3"></div>
@@ -36,7 +36,7 @@
             <p class="tap-text">BAŞLAMAK İÇİN DOKUN</p>
         </div>
     </div>
-</div>
+</div>-->
     <div id="game-container"></div>
     
     <div id="ui-layer">
@@ -145,6 +145,29 @@
     </audio>
 
     <script type="module" src="ton-service.js"></script>
-    <script type="module" src="game.js?v=2.1"></script>
+    <script type="module" src="game/main.js"></script>
+    <script type="module">
+    import { GameState } from './game/core/gameState.js';
+
+    const playBtn = document.getElementById('btn-start');
+    const menu = document.getElementById('start-screen'); // menü div’inin id’si
+
+    if (playBtn) {
+        playBtn.addEventListener('click', () => {
+            GameState.isPlaying = true;
+
+            if (menu) {
+                menu.style.display = 'none';
+            }
+
+            if (window.unlockAudio) {
+                window.unlockAudio();
+            }
+
+            console.log('GAME STARTED');
+        });
+    }
+</script>
+
 </body>
 </html>

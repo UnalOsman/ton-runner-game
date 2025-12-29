@@ -1,4 +1,4 @@
-import { tonConnectUI, checkNftOwnership, purchasePlayReset } from './ton-service.js';
+/*  import { tonConnectUI, checkNftOwnership, purchasePlayReset } from '../ton-service.js';
 
 const tg = window.Telegram.WebApp;
 tg.expand();
@@ -386,7 +386,7 @@ function spawnCityRow(zPos) {
               - Ev merkezinden
               - Ev genişliğinin YARISI kadar dışarı
               - Üstüne güvenli boşluk ekle
-            */
+            
             const safeGap = 0.6;
 
             filler.position.set(
@@ -835,3 +835,4 @@ window.addEventListener('resize', () => {
 loadUserData();
 initApp();
 animate();
+*/
