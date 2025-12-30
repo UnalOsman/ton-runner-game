@@ -10,6 +10,9 @@ import { initInput } from './core/input.js';
 import { AudioSystem } from './systems/audioSystem.js';
 import { checkPlayerCollectibles } from './systems/collisionSystem.js';
 
+import { checkPlayerObstacles } from './systems/collisionSystem.js';
+
+const obstacles = [];
 const collectibles = [];
 const audioSystem = new AudioSystem();
 
@@ -48,7 +51,8 @@ const spawner = new Spawner(
     scene,
     createHouse,
     sceneryObjects,
-    collectibles
+    collectibles,
+    obstacles
 );
 
 // PLAYER
@@ -82,6 +86,21 @@ startGameLoop({
 
         collectibles.forEach(c => {
             c.update(deltaTime, GameState.speed);
+        });
+
+        obstacles.forEach(o => {
+            o.update(deltaTime, GameState.speed);
+        });
+
+        checkPlayerObstacles(player, obstacles, scene, (type) => {
+            console.log('GAME OVER - HIT:', type);
+
+            GameState.isPlaying = false;
+
+            const gameOverScreen = document.getElementById('game-over-screen');
+            if (gameOverScreen) {
+                gameOverScreen.classList.remove('hidden');
+            }
         });
 
         checkPlayerCollectibles(
