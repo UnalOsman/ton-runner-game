@@ -1,5 +1,4 @@
 import { LANES } from '../config/constants.js';
-import { GameState } from '../core/gameState.js';
 
 export class Player {
     constructor(scene) {

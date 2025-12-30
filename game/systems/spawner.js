@@ -2,12 +2,13 @@ import { GameState } from '../core/gameState.js';
 import {
     CITY_ROW_DISTANCE,
     CITY_SPAWN_Z,
-    STRUCTURE_OFFSET_X
+    STRUCTURE_OFFSET_X,
+    LANES,
+    COLLECTIBLE_PATTERN
 } from '../config/constants.js';
-import { Collectible } from '../entities/collectible.js';
-import { LANES } from '../config/constants.js';
-import { Obstacle, OBSTACLE_TYPES } from '../entities/obstacle.js';
 
+import { Collectible } from '../entities/collectible.js';
+import { Obstacle, OBSTACLE_TYPES } from '../entities/obstacle.js';
 
 export class Spawner {
     constructor(scene, houseFactory, sceneryObjects, collectibles, obstacles) {
@@ -18,8 +19,7 @@ export class Spawner {
         this.obstacles = obstacles;
 
         this.nextCityZ = -CITY_ROW_DISTANCE;
-        this.nextCollectibleZ= -15;
-        this.nextObstacleZ= -25;
+        this.nextObstacleZ = -20;
     }
 
     update(deltaTime) {
@@ -27,7 +27,6 @@ export class Spawner {
         this.collectibles = this.collectibles.filter(c => !c.collected);
 
         this.nextCityZ += GameState.speed * deltaTime;
-        this.nextCollectibleZ += GameState.speed * deltaTime;
         this.nextObstacleZ += GameState.speed * deltaTime;
 
         if (this.nextCityZ >= 0) {
@@ -35,59 +34,45 @@ export class Spawner {
             this.nextCityZ = -CITY_ROW_DISTANCE;
         }
 
-        if (this.nextCollectibleZ >= 0) {
-            this.spawnCollectible(-20);
-            this.nextCollectibleZ = -15;
-        }
-
         if (this.nextObstacleZ >= 0) {
             this.spawnObstacle(-30);
             this.nextObstacleZ = -25;
         }
-
     }
 
     spawnCityRow(z) {
-        console.log('CITY SPAWN');
         [-1, 1].forEach(side => {
             const house = this.houseFactory();
-
-            house.position.set(
-                side * STRUCTURE_OFFSET_X,
-                0,
-                z
-            );
-
+            house.position.set(side * STRUCTURE_OFFSET_X, 0, z);
             this.scene.add(house);
             this.sceneryObjects.push(house);
         });
     }
 
-    spawnCollectible(z) {
-        const laneIndex = Math.floor(Math.random() * LANES.length);
-        const x = LANES[laneIndex];
-
-        const blocked = this.obstacles.some(o =>
-            Math.abs(o.mesh.position.z - z) < 2 &&
-            o.mesh.position.x === x
-        );
-
-        if (blocked) return;
-
-        const c = new Collectible(this.scene, x, z);
-        this.collectibles.push(c);
-    }
-
-
     spawnObstacle(z) {
-        const laneIndex = Math.floor(Math.random() * LANES.length);
-        const x = LANES[laneIndex];
-
+        const lane = LANES[Math.floor(Math.random() * LANES.length)];
         const types = Object.values(OBSTACLE_TYPES);
         const type = types[Math.floor(Math.random() * types.length)];
 
-        const o = new Obstacle(this.scene, type, x, z);
-        this.obstacles.push(o);
+        const obstacle = new Obstacle(this.scene, type, lane, z);
+        this.obstacles.push(obstacle);
+
+        // ✅ SADECE SLIDE ALTINDA
+        if (type.allowCollectibleBelow) {
+            this.spawnCollectibleChain(lane, z - 1.5);
+        }
     }
 
+    spawnCollectibleChain(laneX, startZ) {
+        const count =
+            COLLECTIBLE_PATTERN.MIN +
+            Math.floor(Math.random() *
+            (COLLECTIBLE_PATTERN.MAX - COLLECTIBLE_PATTERN.MIN + 1));
+
+        for (let i = 0; i < count; i++) {
+            const z = startZ - i * COLLECTIBLE_PATTERN.SPACING;
+            const c = new Collectible(this.scene, laneX, z);
+            this.collectibles.push(c);
+        }
+    }
 }
