@@ -23,8 +23,21 @@ export class Spawner {
     }
 
     update(deltaTime) {
-        this.obstacles = this.obstacles.filter(o => !o.isDestroyed);
-        this.collectibles = this.collectibles.filter(c => !c.collected);
+        //this.obstacles = this.obstacles.filter(o => !o.isDestroyed);
+        //this.collectibles = this.collectibles.filter(c => !c.collected);
+
+        // Fix cleanup to preserve array references (using splice instead of filter)
+        for (let i = this.obstacles.length - 1; i >= 0; i--) {
+            if (this.obstacles[i].isDestroyed) {
+                this.obstacles.splice(i, 1);
+            }
+        }
+        
+        for (let i = this.collectibles.length - 1; i >= 0; i--) {
+            if (this.collectibles[i].collected) {
+                this.collectibles.splice(i, 1);
+            }
+        }
 
         this.nextCityZ += GameState.speed * deltaTime;
         this.nextObstacleZ += GameState.speed * deltaTime;
