@@ -2,8 +2,6 @@ import { GameState } from './core/gameState.js';
 import { startGameLoop } from './core/gameLoop.js';
 
 import { Spawner } from './systems/spawner.js';
-import { createHouse } from './entities/house.js';
-
 import { Player } from './entities/player.js';
 import { initInput } from './core/input.js';
 
@@ -11,10 +9,12 @@ import { AudioSystem } from './systems/audioSystem.js';
 import { checkPlayerCollectibles } from './systems/collisionSystem.js';
 
 import { checkPlayerObstacles } from './systems/collisionSystem.js';
+import { AssetManager } from './managers/assetManager.js';
 
 const obstacles = [];
 const collectibles = [];
 const audioSystem = new AudioSystem();
+const assetManager = new AssetManager();
 
 window.unlockAudio = () => {
     audioSystem.unlock();
@@ -23,6 +23,7 @@ window.unlockAudio = () => {
 // SCENE
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
+scene.fog = new THREE.Fog(0x87CEEB, 20, 90);
 
 // CAMERA
 const camera = new THREE.PerspectiveCamera(
@@ -32,92 +33,214 @@ const camera = new THREE.PerspectiveCamera(
     100
 );
 camera.position.set(0, 3, 7);
+camera.lookAt(0, 1, -20); // Look ahead
 
 // RENDERER
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+
 document.getElementById('game-container').appendChild(renderer.domElement);
 
 // LIGHT
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(10, 20, 10);
-scene.add(light);
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+scene.add(hemiLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+dirLight.position.set(10, 20, 10);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.width = 1024;
+dirLight.shadow.mapSize.height = 1024;
+dirLight.shadow.camera.near = 0.5;
+dirLight.shadow.camera.far = 50;
+scene.add(dirLight);
 
 // SCENERY STORAGE
 const sceneryObjects = [];
 
-// SPAWNER
-const spawner = new Spawner(
-    scene,
-    createHouse,
-    sceneryObjects,
-    collectibles,
-    obstacles
-);
+// GLOBAL VARIABLES
+let spawner;
+let player;
+let roadParts = [];
 
-// PLAYER
-const player = new Player(scene);
-initInput(player);
+// WAITING FOR ASSETS
+assetManager.loadAll(() => {
+    console.log("Assets Loaded. Waiting for user to start.");
 
+    // Yükleme ekranı güncellemeleri
+    const loadingContainer = document.getElementById('loading-container');
+    const tapToStart = document.getElementById('tap-to-start');
 
-// GROUND (DEBUG)
-const groundGeo = new THREE.PlaneGeometry(50, 200);
-const groundMat = new THREE.MeshStandardMaterial({ color: 0x55aa55 });
-const ground = new THREE.Mesh(groundGeo, groundMat);
-ground.rotation.x = -Math.PI / 2;
-ground.position.z = -50;
-scene.add(ground);
+    if (loadingContainer) loadingContainer.style.display = 'none';
+    if (tapToStart) tapToStart.classList.remove('hidden');
 
+    // Splash ekranına tıklama listener'ı (Sadece yüklendikten sonra aktif)
+    const splash = document.getElementById('splash-screen');
+    splash.addEventListener('click', () => {
+        splash.style.transition = 'opacity 0.5s';
+        splash.style.opacity = '0';
+        setTimeout(() => splash.style.display = 'none', 500);
 
-// GAME START
-//GameState.isPlaying = true;
+        // Audio Unlock
+        audioSystem.unlock();
 
-// LOOP
-startGameLoop({
-    renderer,
-    scene,
-    camera,
-    update(deltaTime) {
-        spawner.update(deltaTime);
-
-        sceneryObjects.forEach(obj => {
-            obj.position.z += GameState.speed * deltaTime;
-        });
-
-        collectibles.forEach(c => {
-            c.update(deltaTime, GameState.speed);
-        });
-
-        obstacles.forEach(o => {
-            o.update(deltaTime, GameState.speed);
-        });
-
-        checkPlayerObstacles(player, obstacles, scene, (type) => {
-            console.log('GAME OVER - HIT:', type);
-
-            GameState.isPlaying = false;
-
-            const gameOverScreen = document.getElementById('game-over-screen');
-            if (gameOverScreen) {
-                gameOverScreen.classList.remove('hidden');
-            }
-        });
-
-        checkPlayerCollectibles(
-            player,
-            collectibles,
-            scene,
-            audioSystem,
-            () => {
-                GameState.score += 1;
-                console.log('TURTA TOPLANDI:', GameState.score);
-            }
-        );
-
-        player.update(deltaTime);
-}
-
+        initGame();
+    }, { once: true });
 });
+
+function initGame() {
+    // SPAWNER
+    spawner = new Spawner(
+        scene,
+        assetManager,
+        sceneryObjects,
+        collectibles,
+        obstacles
+    );
+
+    // PLAYER
+    player = new Player(scene, assetManager);
+    initInput(player);
+
+    // GROUND (Rolling Road)
+    // Create initial road segments
+    for (let i = 0; i < 8; i++) { // Increase buffer
+        const road = assetManager.clone('road');
+        if (road) {
+            road.scale.set(0.01, 0.01, 0.01);
+            road.position.z = -i * 20;
+            road.rotation.y = -Math.PI / 2;
+            scene.add(road);
+            roadParts.push(road);
+
+            // Initial scenery - Spawn for every segment to create a full city
+            if (i > 0) { // Start immediately after player start
+                spawner.spawnCityBlock(-i * 20);
+            }
+        }
+    }
+
+    // GAME LOOP START
+    startGameLoop({
+        renderer,
+        scene,
+        camera,
+        update(deltaTime) {
+
+            if (roadParts.length > 0) {
+                roadParts.forEach(part => {
+                    part.position.z += GameState.speed * deltaTime;
+                    if (part.position.z > 20) {
+                        part.position.z -= 160; // 8 segments * 20 units
+                        // Always spawn city row to prevent gaps
+                        spawner.spawnCityBlock(part.position.z);
+                    }
+                });
+            }
+
+            spawner.update(deltaTime);
+
+            // SCENERY CLEANUP
+            for (let i = sceneryObjects.length - 1; i >= 0; i--) {
+                const obj = sceneryObjects[i];
+                obj.position.z += GameState.speed * deltaTime;
+                if (obj.position.z > 20) {
+                    scene.remove(obj);
+                    sceneryObjects.splice(i, 1);
+                }
+            }
+
+            // COLLECTIBLES UPDATE & CLEANUP
+            for (let i = collectibles.length - 1; i >= 0; i--) {
+                const c = collectibles[i];
+                c.update(deltaTime, GameState.speed);
+                if (c.mesh.position.z > 20) {
+                    scene.remove(c.mesh);
+                    collectibles.splice(i, 1);
+                }
+            }
+
+            // OBSTACLES UPDATE & CLEANUP
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const o = obstacles[i];
+                o.update(deltaTime, GameState.speed);
+                if (o.mesh.position.z > 20) {
+                    // Manually destroy mesh if not already done
+                    scene.remove(o.mesh);
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            checkPlayerObstacles(player, obstacles, scene, (type) => {
+                console.log('GAME OVER - HIT:', type);
+
+                GameState.isPlaying = false;
+
+                const gameOverScreen = document.getElementById('game-over-screen');
+                if (gameOverScreen) {
+                    gameOverScreen.classList.remove('hidden');
+                    document.getElementById('final-score').innerText = Math.floor(GameState.score);
+                    document.getElementById('final-turtles').innerText = GameState.turtlesCollected;
+
+                    const btnRestart = document.getElementById('btn-restart');
+                    if (btnRestart) {
+                        btnRestart.onclick = () => {
+                            if (window.resetGame) window.resetGame();
+                            GameState.isPlaying = true;
+                            gameOverScreen.classList.add('hidden');
+
+                            obstacles.forEach(o => scene.remove(o.mesh));
+                            obstacles.length = 0;
+                            collectibles.forEach(c => scene.remove(c.mesh));
+                            collectibles.length = 0;
+                            sceneryObjects.forEach(s => scene.remove(s));
+                            sceneryObjects.length = 0;
+
+                            roadParts.forEach((part, i) => {
+                                part.position.z = -i * 20;
+                                // Respawn city for restarted road (skip i=0 for start area)
+                                if (i > 0) {
+                                    spawner.spawnCityBlock(-i * 20);
+                                }
+                            });
+                        };
+                    }
+                }
+            });
+
+            checkPlayerCollectibles(
+                player,
+                collectibles,
+                scene,
+                audioSystem,
+                () => {
+                    GameState.turtlesCollected += 1;
+                    const turtleCounter = document.getElementById('in-game-turtles');
+                    if (turtleCounter) turtleCounter.innerText = GameState.turtlesCollected;
+                }
+            );
+
+            player.update(deltaTime);
+
+            GameState.score += 5 * deltaTime;
+            const scoreUi = document.getElementById('in-game-score');
+            if (scoreUi) scoreUi.innerText = Math.floor(GameState.score).toString().padStart(5, '0');
+        }
+    });
+}
 
 window.unlockAudio = () => audioSystem.unlock();
 
+window.resetGame = () => {
+    GameState.reset();
+    const turtleCounter = document.getElementById('in-game-turtles');
+    const scoreCounter = document.getElementById('in-game-score');
+    if (turtleCounter) turtleCounter.innerText = '0';
+    if (scoreCounter) scoreCounter.innerText = '00000';
+
+    if (player && player.reset) player.reset();
+};
