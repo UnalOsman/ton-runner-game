@@ -23,7 +23,7 @@ export function checkPlayerObstacles(player, obstacles, scene, onGameOver) {
     const playerBox = new THREE.Box3().setFromObject(player.mesh);
 
     obstacles.forEach((obs) => {
-        if (obs.processed) return; // Skip already handled obstacles
+        // if (obs.processed) return; // REMOVED: Allow continuous re-check for side collisions
 
         const obsBox = new THREE.Box3().setFromObject(obs.mesh);
 
@@ -48,8 +48,7 @@ export function checkPlayerObstacles(player, obstacles, scene, onGameOver) {
                 break;
         }
 
-        // Her durumda objeyi "işlendi" olarak işaretle ki tekrar tetiklenmesin
-        obs.processed = true;
+        // obs.processed = true; // REMOVED: Check every frame while intersecting
 
         if (survived) {
             // Başarılı geçiş - hiçbir şey yapma (obje sahnede kalsın)

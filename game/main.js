@@ -11,6 +11,8 @@ import { checkPlayerCollectibles } from './systems/collisionSystem.js';
 import { checkPlayerObstacles } from './systems/collisionSystem.js';
 import { AssetManager } from './managers/assetManager.js';
 
+import { SkySystem } from './systems/skySystem.js';
+
 const obstacles = [];
 const collectibles = [];
 const audioSystem = new AudioSystem();
@@ -22,15 +24,15 @@ window.unlockAudio = () => {
 
 // SCENE
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87CEEB);
-scene.fog = new THREE.Fog(0x87CEEB, 20, 90);
+// scene.background = new THREE.Color(0x87CEEB); // REMOVED FOR SKY
+// scene.fog = new THREE.Fog(0xFFFFFF, 20, 150); // REMOVED AS REQUESTED (White horizon)
 
 // CAMERA
 const camera = new THREE.PerspectiveCamera(
     60,
     window.innerWidth / window.innerHeight,
     0.1,
-    100
+    50000 // Increased Far clip for Sky
 );
 camera.position.set(0, 3, 7);
 camera.lookAt(0, 1, -20); // Look ahead
@@ -42,22 +44,25 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 0.65; // Slightly toned down
 
 document.getElementById('game-container').appendChild(renderer.domElement);
 
 // LIGHT
-const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.7); // Balanced
 scene.add(hemiLight);
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+const dirLight = new THREE.DirectionalLight(0xffffff, 2.0); // Brighter sun
 dirLight.position.set(10, 20, 10);
 dirLight.castShadow = true;
 dirLight.shadow.mapSize.width = 1024;
 dirLight.shadow.mapSize.height = 1024;
 dirLight.shadow.camera.near = 0.5;
-dirLight.shadow.camera.far = 50;
+dirLight.shadow.camera.far = 100;
 scene.add(dirLight);
+
+// SKY SYSTEM
+const skySystem = new SkySystem(scene, dirLight);
 
 // SCENERY STORAGE
 const sceneryObjects = [];
@@ -68,29 +73,85 @@ let player;
 let roadParts = [];
 
 // WAITING FOR ASSETS
-assetManager.loadAll(() => {
-    console.log("Assets Loaded. Waiting for user to start.");
+// WAITING FOR ASSETS
+// VISUAL LOADING STATE
+let realProgress = 0;
+let visualProgress = 0;
+let isGameInitialized = false;
 
-    // Yükleme ekranı güncellemeleri
-    const loadingContainer = document.getElementById('loading-container');
-    const tapToStart = document.getElementById('tap-to-start');
+// WAITING FOR ASSETS
+assetManager.loadAll(
+    // ON LOAD COMPLETE (Assets are technically downloaded)
+    () => {
+        realProgress = 100;
+        console.log("Downloads complete. waiting for visual sync...");
+    },
+    // ON PROGRESS (Downloads happening)
+    (itemsLoaded, itemsTotal) => {
+        realProgress = Math.floor((itemsLoaded / itemsTotal) * 100);
+    }
+);
 
-    if (loadingContainer) loadingContainer.style.display = 'none';
-    if (tapToStart) tapToStart.classList.remove('hidden');
+// SMOOTH LOADING LOOP
+const loadingInterval = setInterval(() => {
+    // 1. Visually catch up to real progress, but slowly
+    if (visualProgress < realProgress) {
+        visualProgress += 1; // Controls speed (approx 60fps * 1 = 60% per sec, let's slow it down)
+    }
 
-    // Splash ekranına tıklama listener'ı (Sadece yüklendikten sonra aktif)
-    const splash = document.getElementById('splash-screen');
-    splash.addEventListener('click', () => {
-        splash.style.transition = 'opacity 0.5s';
-        splash.style.opacity = '0';
-        setTimeout(() => splash.style.display = 'none', 500);
+    // Limits
+    if (visualProgress > 100) visualProgress = 100;
 
-        // Audio Unlock
-        audioSystem.unlock();
+    // 2. Update UI
+    const bar = document.getElementById('loading-bar');
+    const txt = document.getElementById('loading-text');
 
-        initGame();
-    }, { once: true });
-});
+    if (bar) bar.style.width = visualProgress + '%';
+    if (txt) txt.innerText = `Yükleniyor... %${visualProgress}`;
+
+    // 3. Check for completion
+    if (visualProgress >= 100) {
+        clearInterval(loadingInterval);
+
+        // HEAVY TASK: Initialize Game while screen is covered
+        if (txt) txt.innerText = "Oyun Hazırlanıyor...";
+
+        // Timeout to let the UI update 'Oyun Hazırlanıyor...' before freeze happens
+        setTimeout(() => {
+            initGame(); // <--- CAUSES FREEZE
+            isGameInitialized = true;
+
+            // Artificial delay to show 'Ready' state
+            setTimeout(() => {
+                // Yükleme ekranı güncellemeleri
+                const loadingContainer = document.getElementById('loading-container');
+                const tapToStart = document.getElementById('tap-to-start');
+
+                if (loadingContainer) loadingContainer.style.display = 'none';
+                if (tapToStart) tapToStart.classList.remove('hidden');
+            }, 1000); // 1 extra second delay
+        }, 100);
+    }
+
+}, 30); // 30ms interval ~ 33fps update for bar
+
+// Splash ekranına tıklama listener'ı
+const splash = document.getElementById('splash-screen');
+splash.addEventListener('click', () => {
+    // Sadece oyun initialize edildiyse ve görsel yükleme bittiyse tıkla
+    if (!isGameInitialized) return;
+
+    splash.style.transition = 'opacity 0.5s';
+    splash.style.opacity = '0';
+    setTimeout(() => splash.style.display = 'none', 500);
+
+    // Audio Unlock
+    audioSystem.unlock();
+
+    // Game Loop is already running? Check startGameLoop call in initGame.
+    // Actually initGame starts the loop. But we might want to ensure 'isPlaying' is managed or just scene rendering.
+    // The current initGame starts the loop immediately but GameState.isPlaying is false, so it just renders background.
+}, { once: true });
 
 function initGame() {
     // SPAWNER
@@ -108,7 +169,7 @@ function initGame() {
 
     // GROUND (Rolling Road)
     // Create initial road segments
-    for (let i = 0; i < 8; i++) { // Increase buffer
+    for (let i = -1; i < 8; i++) { // Start from -1 to cover behind player
         const road = assetManager.clone('road');
         if (road) {
             road.scale.set(0.01, 0.01, 0.01);
@@ -117,9 +178,12 @@ function initGame() {
             scene.add(road);
             roadParts.push(road);
 
-            // Initial scenery - Spawn for every segment to create a full city
-            if (i > 0) { // Start immediately after player start
-                spawner.spawnCityBlock(-i * 20);
+            // Spawn for every segment
+            spawner.spawnCityBlock(-i * 20);
+
+            // Spawn obstacles (Skip first two segments for safety)
+            if (i > 1) {
+                spawner.spawnWorldSegment(-i * 20);
             }
         }
     }
@@ -134,10 +198,10 @@ function initGame() {
             if (roadParts.length > 0) {
                 roadParts.forEach(part => {
                     part.position.z += GameState.speed * deltaTime;
-                    if (part.position.z > 20) {
-                        part.position.z -= 160; // 8 segments * 20 units
-                        // Always spawn city row to prevent gaps
+                    if (part.position.z > 25) { // Increased limit
+                        part.position.z -= 180; // Adjusted for 9 segments (9 * 20)
                         spawner.spawnCityBlock(part.position.z);
+                        spawner.spawnWorldSegment(part.position.z);
                     }
                 });
             }
@@ -148,7 +212,7 @@ function initGame() {
             for (let i = sceneryObjects.length - 1; i >= 0; i--) {
                 const obj = sceneryObjects[i];
                 obj.position.z += GameState.speed * deltaTime;
-                if (obj.position.z > 20) {
+                if (obj.position.z > 25) { // Increased limit
                     scene.remove(obj);
                     sceneryObjects.splice(i, 1);
                 }
@@ -158,7 +222,7 @@ function initGame() {
             for (let i = collectibles.length - 1; i >= 0; i--) {
                 const c = collectibles[i];
                 c.update(deltaTime, GameState.speed);
-                if (c.mesh.position.z > 20) {
+                if (c.mesh.position.z > 25) { // Increased limit
                     scene.remove(c.mesh);
                     collectibles.splice(i, 1);
                 }
@@ -168,7 +232,7 @@ function initGame() {
             for (let i = obstacles.length - 1; i >= 0; i--) {
                 const o = obstacles[i];
                 o.update(deltaTime, GameState.speed);
-                if (o.mesh.position.z > 20) {
+                if (o.mesh.position.z > 25) { // Increased limit
                     // Manually destroy mesh if not already done
                     scene.remove(o.mesh);
                     obstacles.splice(i, 1);
@@ -200,13 +264,27 @@ function initGame() {
                             sceneryObjects.forEach(s => scene.remove(s));
                             sceneryObjects.length = 0;
 
-                            roadParts.forEach((part, i) => {
-                                part.position.z = -i * 20;
-                                // Respawn city for restarted road (skip i=0 for start area)
-                                if (i > 0) {
+                            // CLEANUP OLD ROAD
+                            roadParts.forEach(r => scene.remove(r));
+                            roadParts.length = 0;
+
+                            // Create initial road segments
+                            for (let i = -1; i < 8; i++) { // Start from -1
+                                const road = assetManager.clone('road');
+                                if (road) {
+                                    road.scale.set(0.01, 0.01, 0.01);
+                                    road.position.z = -i * 20;
+                                    road.rotation.y = -Math.PI / 2;
+                                    scene.add(road);
+                                    roadParts.push(road);
+
                                     spawner.spawnCityBlock(-i * 20);
+
+                                    if (i > 1) {
+                                        spawner.spawnWorldSegment(-i * 20);
+                                    }
                                 }
-                            });
+                            }
                         };
                     }
                 }

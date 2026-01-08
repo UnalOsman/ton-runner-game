@@ -17,10 +17,6 @@ export class Spawner {
         this.sceneryObjects = sceneryObjects;
         this.collectibles = collectibles;
         this.obstacles = obstacles;
-
-        this.nextCityZ = -CITY_ROW_DISTANCE;
-        this.nextObstacleZ = -20;
-        this.nextCollectibleZ = -15;
     }
 
     update(deltaTime) {
@@ -35,28 +31,27 @@ export class Spawner {
                 this.collectibles.splice(i, 1);
             }
         }
+    }
 
-        const moveAmount = GameState.speed * deltaTime;
-        this.nextCityZ += moveAmount;
-        this.nextObstacleZ += moveAmount;
-        this.nextCollectibleZ += moveAmount;
+    spawnWorldSegment(z) {
+        // Road segment is 20 units long. Center is roughly z + 10 (since z is start).
+        // Let's spawn obstacles roughly in the middle or distribute them.
 
-        // City spawning is now handled in main.js synced with road segments
-        /*
-        if (this.nextCityZ >= 0) {
-            this.spawnCityRow(CITY_SPAWN_Z);
-            this.nextCityZ = -CITY_ROW_DISTANCE;
-        }
-        */
+        // Chance to spawn obstacle
+        if (Math.random() > 0.15) { // Increased frequency (was 0.3)
+            // Spawn at random offset within the segment
+            const offset = 5 + Math.random() * 10;
 
-        if (this.nextObstacleZ >= 0) {
-            this.spawnObstacle(-30);
-            this.nextObstacleZ = -25;
+            // 40% chance of double obstacle (Harder)
+            const spawnCount = Math.random() > 0.6 ? 2 : 1;
+
+            this.spawnObstacle(z + offset, spawnCount);
         }
 
-        if (this.nextCollectibleZ >= 0) {
-            this.trySpawnCollectibles(-30);
-            this.nextCollectibleZ = -(15 + Math.random() * 20);
+        // Chance to spawn collectibles
+        if (Math.random() > 0.4) {
+            const offset = 2 + Math.random() * 15;
+            this.trySpawnCollectibles(z + offset);
         }
     }
 
@@ -73,7 +68,27 @@ export class Spawner {
             'blupotopark'
         ];
 
+        // Shared Geometry/Material for ground (Created once effectively or cheap enough)
+        // ideally these should be cached in constructor but for now local is fine or we stick to simple mesh
+        if (!this.groundGeo) this.groundGeo = new THREE.PlaneGeometry(50, 10);
+        if (!this.groundMat) this.groundMat = new THREE.MeshStandardMaterial({
+            color: 0x2a3a2a, // Dark green/grey
+            roughness: 1,
+            metalness: 0
+        });
+
         [-1, 1].forEach(side => {
+            // 1. SPAWN GROUND
+            const ground = new THREE.Mesh(this.groundGeo, this.groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            // Position: side * 28 (Center of 50 width) -> Edge at 3. That meets road at ~2.5.
+            ground.position.set(side * 28, 0, z);
+            ground.receiveShadow = true;
+
+            this.scene.add(ground);
+            this.sceneryObjects.push(ground);
+
+            // 2. SPAWN BUILDING
             const name = buildings[Math.floor(Math.random() * buildings.length)];
             const building = this.assetManager.clone(name);
 
@@ -88,24 +103,22 @@ export class Spawner {
         });
     }
 
-    spawnObstacle(z) {
+    spawnObstacle(z, spawnCount = 1) {
         const shuffledLanes = [...LANES].sort(() => 0.5 - Math.random());
-        let selectedLane = null;
+        let spawned = 0;
 
         for (let lane of shuffledLanes) {
+            if (spawned >= spawnCount) break;
+
             if (!this.isLaneBlockedByCollectibles(lane, z)) {
-                selectedLane = lane;
-                break;
+                const types = Object.values(OBSTACLE_TYPES);
+                const type = types[Math.floor(Math.random() * types.length)];
+
+                const obstacle = new Obstacle(this.scene, type, lane, z, this.assetManager);
+                this.obstacles.push(obstacle);
+                spawned++;
             }
         }
-
-        if (selectedLane === null) return;
-
-        const types = Object.values(OBSTACLE_TYPES);
-        const type = types[Math.floor(Math.random() * types.length)];
-
-        const obstacle = new Obstacle(this.scene, type, selectedLane, z, this.assetManager);
-        this.obstacles.push(obstacle);
     }
 
     isLaneBlockedByCollectibles(laneX, z) {
