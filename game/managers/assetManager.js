@@ -25,8 +25,16 @@ export class AssetManager {
         };
     }
 
-    loadAll(onLoadCallback) {
+    loadAll(onLoadCallback, onProgressCallback) {
         this.onLoadCallback = onLoadCallback;
+        this.onProgressCallback = onProgressCallback;
+
+        this.manager.onProgress = (url, itemsLoaded, itemsTotal) => {
+            console.log(`Loading file: ${url}.\nLoaded ${itemsLoaded} of ${itemsTotal} files.`);
+            if (this.onProgressCallback) {
+                this.onProgressCallback(itemsLoaded, itemsTotal);
+            }
+        };
 
         // KARAKTER
         this.loadFBX('player', 'assets/karakterler/blup3run.fbx');

@@ -122,10 +122,17 @@ export class Player {
                 this.mesh.position.y = 0;
                 this.isJumping = false;
 
-                // Return to Run
-                if (this.actions.run) {
-                    this.actions.run.reset().play();
-                    this.actions.jump.stop();
+                if (this.queuedSlide) {
+                    this.queuedSlide = false;
+                    // Stop Jump anim explicitly before sliding
+                    if (this.actions.jump) this.actions.jump.stop();
+                    this.slide();
+                } else {
+                    // Regular Landing
+                    if (this.actions.run) {
+                        this.actions.run.reset().play();
+                        if (this.actions.jump) this.actions.jump.stop();
+                    }
                 }
             }
         }
@@ -133,36 +140,50 @@ export class Player {
 
     jump() {
         if (this.isJumping) return;
+
+        // Interrupt Slide if active
+        if (this.isSliding) {
+            this.isSliding = false;
+            this.queuedSlide = false;
+            if (this.slideTimer) clearTimeout(this.slideTimer);
+            if (this.actions.roll) this.actions.roll.stop();
+        }
+
         this.isJumping = true;
         this.yVelocity = 8;
 
         if (this.actions.jump) {
-            this.actions.run.stop();
+            if (this.actions.run) this.actions.run.stop();
             this.actions.jump.reset().play();
         }
     }
 
     slide() {
         if (this.isSliding) return;
+
+        // Prevent sliding while in air, but Queue it and Fast Drop
+        if (this.isJumping) {
+            this.yVelocity = -100; // Fast drop mechanic
+            this.queuedSlide = true;
+            return;
+        }
+
         this.isSliding = true;
 
-        // Physical Hitbox Adjustment (scale helper or logic override)
-        // Note: For collision, we might need a separate hitbox if mesh is complex
-
         if (this.actions.roll) {
-            this.actions.run.stop();
+            if (this.actions.run) this.actions.run.stop();
             this.actions.roll.reset().play();
         }
 
-        setTimeout(() => {
+        this.slideTimer = setTimeout(() => {
             if (this.isSliding) {
                 this.isSliding = false;
                 if (this.actions.run && !this.isJumping) {
-                    this.actions.roll.stop();
+                    if (this.actions.roll) this.actions.roll.stop();
                     this.actions.run.reset().play();
                 }
             }
-        }, 800); // Roll duration approx
+        }, 800);
     }
 
     isOnGround() {
