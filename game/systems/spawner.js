@@ -4,7 +4,8 @@ import {
     CITY_SPAWN_Z,
     STRUCTURE_OFFSET_X,
     LANES,
-    COLLECTIBLE_PATTERN
+    COLLECTIBLE_PATTERN,
+    BUILDING_PARAMS
 } from '../config/constants.js';
 
 import { Collectible } from '../entities/collectible.js';
@@ -62,11 +63,7 @@ export class Spawner {
     }
 
     spawnCityRow(z) {
-        const buildings = [
-            'blupHouse1', 'blupHouse2', 'blupHouse3',
-            'blupHouse4', 'blupHouse5', 'blupHouse6',
-            'blupotopark'
-        ];
+        const buildingNames = Object.keys(BUILDING_PARAMS);
 
         // Shared Geometry/Material for ground (Created once effectively or cheap enough)
         // ideally these should be cached in constructor but for now local is fine or we stick to simple mesh
@@ -89,13 +86,21 @@ export class Spawner {
             this.sceneryObjects.push(ground);
 
             // 2. SPAWN BUILDING
-            const name = buildings[Math.floor(Math.random() * buildings.length)];
+            const name = buildingNames[Math.floor(Math.random() * buildingNames.length)];
+            const params = BUILDING_PARAMS[name];
             const building = this.assetManager.clone(name);
 
             if (building) {
-                building.scale.set(0.01, 0.01, 0.01);
-                building.rotation.y = side === -1 ? Math.PI / 2 : -Math.PI / 2;
-                building.position.set(side * STRUCTURE_OFFSET_X, 1.5, z); // Lifted up
+                building.scale.set(params.scale, params.scale, params.scale);
+
+                let baseRotation = side === -1 ? Math.PI / 2 : -Math.PI / 2;
+                if (params.rotationFix) {
+                    baseRotation += params.rotationFix;
+                }
+                building.rotation.y = baseRotation;
+
+                const xDist = params.xOffset !== undefined ? params.xOffset : STRUCTURE_OFFSET_X;
+                building.position.set(side * xDist, params.yOffset, z);
 
                 this.scene.add(building);
                 this.sceneryObjects.push(building);

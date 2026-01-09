@@ -53,12 +53,18 @@ const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.7); // Balance
 scene.add(hemiLight);
 
 const dirLight = new THREE.DirectionalLight(0xffffff, 2.0); // Brighter sun
-dirLight.position.set(10, 20, 10);
+dirLight.position.set(20, 30, 20); // Moved up and back a bit
 dirLight.castShadow = true;
-dirLight.shadow.mapSize.width = 1024;
-dirLight.shadow.mapSize.height = 1024;
+dirLight.shadow.mapSize.width = 2048; // Higher res for larger area
+dirLight.shadow.mapSize.height = 2048;
+const d = 40; // Coverage radius
+dirLight.shadow.camera.left = -d;
+dirLight.shadow.camera.right = d;
+dirLight.shadow.camera.top = d;
+dirLight.shadow.camera.bottom = -d;
 dirLight.shadow.camera.near = 0.5;
-dirLight.shadow.camera.far = 100;
+dirLight.shadow.camera.far = 150;
+dirLight.shadow.bias = -0.0005; // Reduce shadow acne
 scene.add(dirLight);
 
 // SKY SYSTEM
@@ -303,6 +309,15 @@ function initGame() {
             );
 
             player.update(deltaTime);
+
+            // Camera Follow Logic (Smooth X movement)
+            // Lerp camera.x towards player.mesh.position.x
+            // Use a factor (e.g., 5-8) for lag
+            camera.position.x += (player.mesh.position.x - camera.position.x) * 5 * deltaTime;
+
+            // Allow camera to sway slightly with player but looking ahead
+            // We want to look at a point in front of the player, but aligned with camera's current X
+            // camera.lookAt(camera.position.x, 1, -20); // This helps to keep rotation aligned
 
             GameState.score += 5 * deltaTime;
             const scoreUi = document.getElementById('in-game-score');

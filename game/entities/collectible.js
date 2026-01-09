@@ -6,7 +6,7 @@ export class Collectible {
             this.mesh = asset;
             const s = 0.005;
             this.mesh.scale.set(s, s, s);
-            this.mesh.position.set(x, 0.8, z);
+            this.mesh.position.set(x, 0.1, z);
         } else {
             const geo = new THREE.SphereGeometry(0.4, 16, 16);
             const mat = new THREE.MeshStandardMaterial({ color: 0xffcc00 });
