@@ -156,7 +156,8 @@
 
     if (playBtn) {
         playBtn.addEventListener('click', () => {
-            if(window.resetGame) window.resetGame();
+            // Menüye dönerken dünya zaten resetlendiği için burada tekrar resetlemiyoruz, 
+            // böylece görsel bir atlama/değişim oluşmuyor.
             GameState.isPlaying = true;
 
             if (menu) {
