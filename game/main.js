@@ -13,6 +13,9 @@ import { AssetManager } from './managers/assetManager.js';
 
 import { SkySystem } from './systems/skySystem.js';
 
+// TON Service import
+import { checkNftOwnership, getWalletAddress, purchasePlayReset } from '../ton-service.js';
+
 const obstacles = [];
 const collectibles = [];
 const audioSystem = new AudioSystem();
@@ -34,7 +37,7 @@ const camera = new THREE.PerspectiveCamera(
     0.1,
     50000 // Increased Far clip for Sky
 );
-camera.position.set(0, 3, 7);
+camera.position.set(0, 2, 7);
 camera.lookAt(0, 1, -20); // Look ahead
 
 // RENDERER
@@ -256,41 +259,60 @@ function initGame() {
                     document.getElementById('final-score').innerText = Math.floor(GameState.score);
                     document.getElementById('final-turtles').innerText = GameState.turtlesCollected;
 
+                    const btnHome = document.getElementById('btn-home');
+                    if (btnHome) {
+                        btnHome.onclick = () => {
+                            if (window.resetGame) window.resetGame();
+                            gameOverScreen.classList.add('hidden');
+                            document.getElementById('start-screen').style.display = 'flex';
+                            document.getElementById('menu-header').classList.remove('hidden');
+                            document.getElementById('game-ui').classList.add('hidden');
+                        };
+                    }
+
+                    const btnBuyReset = document.getElementById('btn-buy-reset');
+                    const nftStatus = document.getElementById('nft-status');
+
+                    // NFT ve Cüzdan Kontrolü
+                    (async () => {
+                        const wallet = await getWalletAddress();
+                        if (wallet) {
+                            const hasNft = await checkNftOwnership(wallet);
+                            if (hasNft) {
+                                if (nftStatus) nftStatus.innerText = "NFT Sahibi: Can Yenileme Ücretsiz!";
+                                if (btnBuyReset) {
+                                    btnBuyReset.innerText = "Bedava Can Al (NFT)";
+                                    btnBuyReset.disabled = false;
+                                    btnBuyReset.style.background = "#2ecc71";
+                                }
+                            } else {
+                                if (nftStatus) nftStatus.innerText = "NFT Bulunamadı. TON ile yenileyebilirsiniz.";
+                                if (btnBuyReset) {
+                                    btnBuyReset.disabled = false;
+                                }
+                            }
+                        } else {
+                            if (nftStatus) nftStatus.innerText = "Cüzdan bağlı değil.";
+                        }
+                    })();
+
+                    if (btnBuyReset) {
+                        btnBuyReset.onclick = async () => {
+                            const success = await purchasePlayReset();
+                            if (success) {
+                                alert("Can Yenilendi!");
+                                // Yeniden başla mantığı (restart ile aynı)
+                                btnRestart.click();
+                            }
+                        };
+                    }
+
                     const btnRestart = document.getElementById('btn-restart');
                     if (btnRestart) {
                         btnRestart.onclick = () => {
                             if (window.resetGame) window.resetGame();
                             GameState.isPlaying = true;
                             gameOverScreen.classList.add('hidden');
-
-                            obstacles.forEach(o => scene.remove(o.mesh));
-                            obstacles.length = 0;
-                            collectibles.forEach(c => scene.remove(c.mesh));
-                            collectibles.length = 0;
-                            sceneryObjects.forEach(s => scene.remove(s));
-                            sceneryObjects.length = 0;
-
-                            // CLEANUP OLD ROAD
-                            roadParts.forEach(r => scene.remove(r));
-                            roadParts.length = 0;
-
-                            // Create initial road segments
-                            for (let i = -1; i < 8; i++) { // Start from -1
-                                const road = assetManager.clone('road');
-                                if (road) {
-                                    road.scale.set(0.01, 0.01, 0.01);
-                                    road.position.z = -i * 20;
-                                    road.rotation.y = -Math.PI / 2;
-                                    scene.add(road);
-                                    roadParts.push(road);
-
-                                    spawner.spawnCityBlock(-i * 20);
-
-                                    if (i > 1) {
-                                        spawner.spawnWorldSegment(-i * 20);
-                                    }
-                                }
-                            }
                         };
                     }
                 }
@@ -324,6 +346,47 @@ function initGame() {
             if (scoreUi) scoreUi.innerText = Math.floor(GameState.score).toString().padStart(5, '0');
         }
     });
+
+    // UI Listeners (Pause/Resume/Quit)
+    const btnPause = document.getElementById('btn-pause');
+    const btnResume = document.getElementById('btn-resume');
+    const btnQuit = document.getElementById('btn-quit');
+    const pauseScreen = document.getElementById('pause-screen');
+
+    if (btnPause) {
+        btnPause.onclick = () => {
+            if (!GameState.isPlaying) return;
+            GameState.isPaused = true;
+            if (pauseScreen) pauseScreen.classList.remove('hidden');
+            // Audio pause logic here if needed
+        };
+    }
+
+    if (btnResume) {
+        btnResume.onclick = () => {
+            GameState.isPaused = false;
+            if (pauseScreen) pauseScreen.classList.add('hidden');
+        };
+    }
+
+    if (btnQuit) {
+        btnQuit.onclick = () => {
+            GameState.isPaused = false;
+            GameState.isPlaying = false;
+            if (pauseScreen) pauseScreen.classList.add('hidden');
+
+            // Show start screen
+            const startScreen = document.getElementById('start-screen');
+            const menuHeader = document.getElementById('menu-header');
+            const gameUi = document.getElementById('game-ui');
+
+            if (startScreen) startScreen.style.display = 'flex';
+            if (menuHeader) menuHeader.classList.remove('hidden');
+            if (gameUi) gameUi.classList.add('hidden');
+
+            if (window.resetGame) window.resetGame();
+        };
+    }
 }
 
 window.unlockAudio = () => audioSystem.unlock();
@@ -336,4 +399,44 @@ window.resetGame = () => {
     if (scoreCounter) scoreCounter.innerText = '00000';
 
     if (player && player.reset) player.reset();
+
+    // Kamera Pozisyonunu Sıfırla
+    if (camera) {
+        camera.position.x = 0;
+        camera.lookAt(0, 1, -20);
+    }
+
+    // Sahnedeki objeleri temizle
+    obstacles.forEach(o => scene.remove(o.mesh));
+    obstacles.length = 0;
+
+    collectibles.forEach(c => scene.remove(c.mesh));
+    collectibles.length = 0;
+
+    sceneryObjects.forEach(s => scene.remove(s));
+    sceneryObjects.length = 0;
+
+    // Yolları temizle
+    roadParts.forEach(r => scene.remove(r));
+    roadParts.length = 0;
+
+    // Yolları ve başlangıç bloklarını yeniden oluştur
+    if (assetManager && spawner) {
+        for (let i = -1; i < 8; i++) {
+            const road = assetManager.clone('road');
+            if (road) {
+                road.scale.set(0.01, 0.01, 0.01);
+                road.position.z = -i * 20;
+                road.rotation.y = -Math.PI / 2;
+                scene.add(road);
+                roadParts.push(road);
+
+                spawner.spawnCityBlock(-i * 20);
+
+                if (i > 1) {
+                    spawner.spawnWorldSegment(-i * 20);
+                }
+            }
+        }
+    }
 };
